@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/caphe_logo_640.png" alt="Caphe" width="440" height="174" />
+</p>
+
 # Caphe
 
 Caphe is a local-first, CPU-native security workflow compiler and executor. It compiles declarative YAML into a content-addressed lock artifact, executes a fixed DAG without model-directed control flow, runs installed security scanners through typed adapters, preserves their raw output, and stores normalized evidence in SQLite.

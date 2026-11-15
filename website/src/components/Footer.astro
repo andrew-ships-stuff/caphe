@@ -5,7 +5,10 @@ const href = (path: string) => `${base}${path.replace(/^\//, '')}`;
 <footer>
   <div class="footer-grid">
     <div>
-      <a class="wordmark" href={href('/')}>caphe<span>_</span></a>
+      <a class="brand" href={href('/')}>
+        <img class="brand-mark" src={href('/caphe-mark.png')} alt="" width="200" height="200" aria-hidden="true" />
+        <span class="wordmark">caphe<span>_</span></span>
+      </a>
       <p>Compile intelligence. Execute deterministically. Verify everything.</p>
       <small>Open source under the MIT License.</small>
     </div>
@@ -18,12 +21,14 @@ const href = (path: string) => `${base}${path.replace(/^\//, '')}`;
   footer { border-top: 1px solid var(--caphe-border); background: var(--caphe-surface); padding: 4rem 1rem; }
   .footer-grid { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 3rem; width: min(1120px, 100%); margin: 0 auto; }
   .footer-grid > div { display: grid; align-content: start; gap: .7rem; }
+  .brand { display: inline-flex; align-items: center; gap: .6rem; width: fit-content; text-decoration: none; }
+  .brand-mark { width: 2.1rem; height: 2.1rem; border-radius: .6rem; background: #0c1014; padding: .2rem; }
   .wordmark { color: var(--caphe-text); font: 800 1.3rem ui-monospace, monospace; text-decoration: none; }
   .wordmark span { color: var(--caphe-accent); }
   p, small, a { color: var(--caphe-muted); }
   p { max-width: 34rem; margin: .2rem 0; }
   strong { color: var(--caphe-text); font-size: .82rem; letter-spacing: .08em; text-transform: uppercase; }
-  .footer-grid a:not(.wordmark) { width: fit-content; text-decoration: none; font-size: .9rem; }
+  .footer-grid a:not(.brand) { width: fit-content; text-decoration: none; font-size: .9rem; }
   .footer-grid a:hover { color: var(--caphe-accent); }
   @media (max-width: 720px) { .footer-grid { grid-template-columns: 1fr 1fr; } .footer-grid > div:first-child { grid-column: 1 / -1; } }
 </style>
