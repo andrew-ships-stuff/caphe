@@ -12,6 +12,13 @@ Implemented:
 
 External output is capped at 64 MiB per invocation and stderr at 1 MiB. The raw output artifact is preserved only after a successful parse. The end-to-end workflow installs a checksum-verified, pinned Poutine release and scans the repository through the compiled executor.
 
-`scripts/install-tools.sh` manages Poutine and actionlint in a Caphe-owned cache directory, defaulting to `${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin`. It does not mutate system package state. actionlint is used as a repository/CI validation companion and is not yet exposed as a scanner adapter.
+`scripts/install-tools.sh` manages only checksum-pinned tools in a Caphe-owned cache directory, defaulting to `${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin`. It does not mutate system package state. OPA, OSV-Scanner, Checkov, and Kubescape must currently be installed independently and discovered on `PATH`; actionlint is used as a repository/CI validation companion and is not exposed as a scanner adapter.
+
+| Adapter | Configuration | Output normalized by Caphe |
+| --- | --- | --- |
+| `scanner.opa` | Required relative `policy` and `query`; optional relative `input` | OPA eval JSON values following the documented result object contract |
+| `scanner.osv` | Optional boolean `offline` | OSV-Scanner v2 JSON vulnerabilities; finding exit code `1` is accepted |
+| `scanner.checkov` | Optional `framework`; dangerous opt-in `includeSensitiveOutput` | Failed checks from single- or multi-framework JSON; source blocks and evaluated values are redacted by default |
+| `scanner.kubescape` | Optional relative `useArtifactsFrom` directory | SARIF results from a local repository scan |
 
 To add an adapter, implement `internal/adapters.Adapter`, use a fixed ID and contract version, strictly validate JSON configuration, construct typed arguments, preserve raw output, and register it in `DefaultRegistry`. Dynamic Go plugins are intentionally unsupported.

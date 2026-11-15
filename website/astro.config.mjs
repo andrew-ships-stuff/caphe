@@ -20,7 +20,7 @@ export default defineConfig({
     starlight({
       title: 'Caphe',
       description: 'CPU-native compiled security workflows.',
-      favicon: '/favicon.svg',
+      favicon: '/favicon.png',
       customCss: ['./src/styles/global.css'],
       logo: { src: './src/assets/mark.svg', alt: 'Caphe' },
       social: [
@@ -34,7 +34,8 @@ export default defineConfig({
           items: [
             { label: 'Getting started', slug: 'docs/getting-started' },
             { label: 'Architecture', slug: 'docs/architecture' },
-            { label: 'CLI reference', slug: 'docs/cli' }
+            { label: 'CLI reference', slug: 'docs/cli' },
+            { label: 'Cluster execution', slug: 'docs/cluster' }
           ]
         },
         {
@@ -60,6 +61,7 @@ export default defineConfig({
         }
       ],
       head: [
+        { tag: 'link', attrs: { rel: 'apple-touch-icon', href: `${base.replace(/\/$/, '')}/apple-touch-icon.png` } },
         { tag: 'meta', attrs: { property: 'og:image', content: socialImage } },
         { tag: 'meta', attrs: { name: 'theme-color', content: '#0c1014' } }
       ]

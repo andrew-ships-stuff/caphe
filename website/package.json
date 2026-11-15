@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "prebuild": "node scripts/render-og.mjs",
+    "render:brand": "node scripts/render-brand.mjs",
     "build": "astro check && astro build",
     "check": "astro check",
     "preview": "astro preview",

@@ -30,6 +30,8 @@ func (a *app) githubAnalyzeCmd() *cobra.Command {
 		if baseReport == "" || headReport == "" || baseSHA == "" || headSHA == "" || repository == "" || pullRequest <= 0 || output == "" {
 			return fmt.Errorf("base/head reports, SHAs, repository, pull request, and output are required")
 		}
+		stop := a.startSpinner("Analyzing pull request")
+		defer stop()
 		threshold, err := parseSeverity(severity)
 		if err != nil {
 			return err
@@ -113,6 +115,7 @@ func (a *app) githubAnalyzeCmd() *cobra.Command {
 				return closeErr
 			}
 		}
+		stop()
 		if err := a.print(map[string]any{"artifact": output, "digest": artifact.Digest, "metrics": artifact.Metrics, "policy": artifact.Policy, "ai": aiResult}); err != nil {
 			return err
 		}
@@ -205,10 +208,13 @@ func (a *app) githubPublishCmd() *cobra.Command {
 		if apiURL == "" {
 			apiURL = os.Getenv("GITHUB_API_URL")
 		}
+		stop := a.startSpinner("Publishing GitHub review")
+		defer stop()
 		result, err := githubreview.Publish(cmd.Context(), artifact, githubreview.PublishOptions{Token: token, APIURL: apiURL, SummaryOnly: summaryOnly, DryRun: dryRun, MaxComments: maxComments})
 		if err != nil {
 			return err
 		}
+		stop()
 		return a.print(result)
 	}}
 	addIdentityFlags(command, &repository, &pullRequest, &baseSHA, &headSHA)

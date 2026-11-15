@@ -1,0 +1,35 @@
+image:
+  repository: ghcr.io/andrew-ships-stuff/caphe-cluster
+  tag: "0.1.0-dev"
+  pullPolicy: IfNotPresent
+
+auth:
+  existingSecret: ""
+  key: auth.json
+
+api:
+  replicas: 1
+  gitHosts: []
+  retention: 168h
+  maxCpuMillis: 2000
+  maxMemory: 4GiB
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+worker:
+  replicas: 1
+  concurrency: 1
+  taskConcurrency: 2
+  resources:
+    requests: {cpu: "1", memory: 1Gi}
+    limits: {cpu: "2", memory: 4Gi}
+
+storage:
+  size: 20Gi
+  accessMode: ReadWriteMany
+  storageClassName: ""
+
+service:
+  type: ClusterIP
+  port: 8787

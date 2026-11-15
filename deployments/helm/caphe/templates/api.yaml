@@ -1,0 +1,71 @@
+{{- if not .Values.auth.existingSecret }}
+{{- fail "auth.existingSecret is required; create a Secret containing the tenant token JSON" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "caphe.name" . }}-api
+  labels:
+    {{- include "caphe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "caphe.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "caphe.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: {{ include "caphe.name" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: caphe
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - cluster
+            - serve
+            - --listen=0.0.0.0:8787
+            - --root=/var/lib/caphe/cluster
+            - --auth-file=/run/caphe-auth/{{ .Values.auth.key }}
+            - --workflow=caphe:default
+            - --network-enforced
+            - --retention={{ .Values.api.retention }}
+            - --max-cpu-millis={{ .Values.api.maxCpuMillis }}
+            - --max-memory={{ .Values.api.maxMemory }}
+            {{- range .Values.api.gitHosts }}
+            - --git-host={{ . }}
+            {{- end }}
+          ports:
+            - {name: http, containerPort: 8787}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/caphe/cluster}
+            - {name: auth, mountPath: /run/caphe-auth, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: {{ include "caphe.name" . }}-data}
+        - name: auth
+          secret: {secretName: {{ .Values.auth.existingSecret }}}
+        - name: tmp
+          emptyDir: {sizeLimit: 2Gi}

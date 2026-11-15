@@ -113,7 +113,15 @@ func (s *Store) SaveFindings(ctx context.Context, executionID string, items []fi
 	return tx.Commit()
 }
 func (s *Store) ListFindings(ctx context.Context) ([]findings.Finding, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT finding_json FROM findings WHERE execution_id=(SELECT id FROM executions ORDER BY started_at DESC LIMIT 1) ORDER BY id`)
+	return s.listFindings(ctx, `SELECT finding_json FROM findings WHERE execution_id=(SELECT id FROM executions ORDER BY started_at DESC LIMIT 1) ORDER BY id`)
+}
+
+func (s *Store) ListFindingsForExecution(ctx context.Context, executionID string) ([]findings.Finding, error) {
+	return s.listFindings(ctx, `SELECT finding_json FROM findings WHERE execution_id=? ORDER BY id`, executionID)
+}
+
+func (s *Store) listFindings(ctx context.Context, query string, args ...any) ([]findings.Finding, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

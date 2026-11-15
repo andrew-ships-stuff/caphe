@@ -1,4 +1,14 @@
+<p align="center">
+  <img src="assets/caphe_logo_640.png" alt="Caphe" width="440" height="174" />
+</p>
+
 # Caphe
+
+[![CI](https://github.com/andrew-ships-stuff/caphe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/andrew-ships-stuff/caphe/actions/workflows/ci.yml)
+[![End-to-end](https://github.com/andrew-ships-stuff/caphe/actions/workflows/e2e.yml/badge.svg?branch=main)](https://github.com/andrew-ships-stuff/caphe/actions/workflows/e2e.yml)
+[![Caphe security analysis](https://github.com/andrew-ships-stuff/caphe/actions/workflows/caphe-pr.yml/badge.svg?event=pull_request)](https://github.com/andrew-ships-stuff/caphe/actions/workflows/caphe-pr.yml)
+[![Go](https://img.shields.io/github/go-mod/go-version/andrew-ships-stuff/caphe?logo=go)](https://github.com/andrew-ships-stuff/caphe/blob/main/go.mod)
+[![License: MIT](https://img.shields.io/github/license/andrew-ships-stuff/caphe)](https://github.com/andrew-ships-stuff/caphe/blob/main/LICENSE)
 
 Caphe is a local-first, CPU-native security workflow compiler and executor. It compiles declarative YAML into a content-addressed lock artifact, executes a fixed DAG without model-directed control flow, runs installed security scanners through typed adapters, preserves their raw output, and stores normalized evidence in SQLite.
 
@@ -7,7 +17,7 @@ The deterministic engine does not require an LLM, GPU, Kubernetes, Docker, API k
 ## Current working scope
 
 - Go CLI: `version`, `doctor`, `init`, hardware inspection, tool discovery, workflow validation/compilation/lock validation, scan/run, findings, graph queries, reports, and AI status/recommendation.
-- Real installed-tool adapters for Opengrep, Syft, Grype, Gitleaks, and Poutine. No production mock fallback exists.
+- Real installed-tool adapters for Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. No production mock fallback exists.
 - Canonical workflow locks with adapter pinning, bounded timeout/retry policy, security/syntax gate records, and SHA-256 digests.
 - Dependency-aware concurrent executor with partial failure, cancellation, raw artifact retention, and execution manifests.
 - SQLite findings/evidence store and content-addressed artifact files.
@@ -35,7 +45,7 @@ Scanners are optional per workflow. Install the tools required by the selected w
 caphe tools doctor
 ```
 
-Caphe never silently substitutes generated findings when a scanner is missing. On macOS, Linux, and Windows, install scanner releases from their respective upstream projects: Opengrep, Anchore Syft, Anchore Grype, Gitleaks, and Poutine. Pin versions in CI and preserve the execution manifest that records detected versions.
+Caphe never silently substitutes generated findings when a scanner is missing. On macOS, Linux, and Windows, install scanner releases from their respective upstream projects: Opengrep, Anchore Syft, Anchore Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Pin versions in CI and preserve the execution manifest that records detected versions.
 
 For an easily removable local toolchain, Caphe can install checksum-verified Poutine and actionlint releases into its own cache:
 
@@ -50,10 +60,10 @@ Set `CAPHE_CACHE` or pass `scripts/install-tools.sh --bin-dir PATH` to choose an
 Homebrew users can install commonly used tools independently:
 
 ```bash
-brew install poutine syft grype gitleaks osv-scanner actionlint
+brew install poutine syft grype gitleaks opa osv-scanner checkov kubescape actionlint
 ```
 
-Poutine, Syft, Grype, and Gitleaks currently have Caphe adapters. OSV-Scanner and actionlint are useful companion tools but do not yet have workflow adapters.
+`scripts/install-tools.sh` only manages tools with reviewed version and checksum pins. Install OPA, OSV-Scanner, Checkov, and Kubescape independently until equivalent pins are added; Caphe will discover them from `PATH`. actionlint remains a repository/CI companion rather than a workflow adapter.
 
 ## Homebrew installation
 
@@ -74,8 +84,8 @@ The included fixture is deliberately vulnerable and must not be deployed.
 
 ```bash
 go build -o caphe ./cmd/caphe
-./caphe workflows validate workflows/demo-local.yaml
-./caphe compile workflows/demo-local.yaml --output demo.lock.json
+./caphe workflows validate caphe:demo-local
+./caphe compile caphe:demo-local --output demo.lock.json
 ./caphe validate demo.lock.json
 ./caphe run demo.lock.json --target examples/vulnerable-go
 ./caphe findings list
@@ -84,7 +94,7 @@ go build -o caphe ./cmd/caphe
 ./caphe report --format html --output caphe-report.html
 ```
 
-`workflows/demo-local.yaml` uses real Opengrep and Syft executables. Its Opengrep rule is stored with the target, so the demo does not fetch a ruleset. The broader default workflow additionally uses Grype and treats unavailable Gitleaks/Opengrep tasks as optional.
+`caphe:demo-local` (bundled in the binary) uses real Opengrep and Syft executables. Its Opengrep rule is stored with the target, so the demo does not fetch a ruleset. The broader default workflow additionally uses Grype and treats unavailable Gitleaks/Opengrep tasks as optional.
 
 State defaults to the user config directory under `caphe/`. Use `--data-dir PATH` for isolated runs.
 
@@ -134,6 +144,48 @@ spec:
 ```
 
 Caphe passes scanner arguments as an argument array, never through a shell. Repository content remains untrusted; ordinary subprocess execution is not a strong sandbox. Read [docs/security.md](docs/security.md) before scanning hostile repositories.
+
+The additional adapters can be selected in any custom workflow:
+
+```yaml
+tasks:
+  - id: dependency-vulnerabilities
+    uses: scanner.osv
+    optional: true
+    with: {offline: true}
+  - id: infrastructure
+    uses: scanner.checkov
+    optional: true
+    with: {framework: "terraform,kubernetes"}
+  - id: kubernetes
+    uses: scanner.kubescape
+    optional: true
+    with: {useArtifactsFrom: .kubescape}
+  - id: policy
+    uses: scanner.opa
+    optional: true
+    with:
+      policy: policy/deny.rego
+      input: policy/input.json
+      query: data.caphe.deny
+```
+
+OPA queries should return a boolean, string, or collection of objects. Object results may include `id`, `message`, `severity`, `path`, and `line`. OSV-Scanner normally uses its remote vulnerability database; set `offline: true` after pre-downloading its local database. Checkov runs with result upload and policy downloads disabled, and Caphe redacts source blocks and evaluated values by default. Set `includeSensitiveOutput: true` only when full Checkov evidence is explicitly required and the artifact store is protected. Set Kubescape's `useArtifactsFrom` to a pre-downloaded artifact directory when it must remain offline.
+
+## Terminal and automation output
+
+Caphe commands are human-readable by default. Diagnostics, scanner coverage, workflow execution, findings, validation, and AI status use aligned sections with `✓`, `✗`, `!`, and `○` status marks. Long-running audits and workflow runs show a spinner only when stdout is an interactive terminal; redirected output never receives terminal control sequences.
+
+Pass the global `--json` flag anywhere in the command to retain stable machine-readable output:
+
+```bash
+caphe doctor                 # terminal dashboard
+caphe doctor --json          # JSON for scripts and CI
+caphe findings list          # readable finding list
+caphe findings list --json   # structured findings
+```
+
+`caphe report` defaults to a readable table. Use `--format json`, `--format sarif`, or `--format html` for report artifacts; `caphe report --json` also selects JSON when no explicit format is supplied.
 
 ## License
 

@@ -1,0 +1,63 @@
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.cluster
+    command:
+      - cluster
+      - serve
+      - --listen=0.0.0.0:8787
+      - --root=/var/lib/caphe/cluster
+      - --auth-file=/run/secrets/caphe-auth
+      - --workflow=caphe:default
+      - --git-host=github.com
+      - --network-enforced
+      - --max-cpu-millis=2000
+      - --max-memory=4GiB
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - cluster-data:/var/lib/caphe/cluster
+    secrets:
+      - caphe-auth
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.cluster
+    command:
+      - cluster
+      - worker
+      - --root=/var/lib/caphe/cluster
+      - --concurrency=1
+      - --task-concurrency=2
+      - --network-enforced
+      - --max-output-bytes=67108864
+    volumes:
+      - cluster-data:/var/lib/caphe/cluster
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=2g,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cpus: 2
+    mem_limit: 4g
+    depends_on:
+      - api
+
+volumes:
+  cluster-data:
+
+secrets:
+  caphe-auth:
+    file: ./auth.json

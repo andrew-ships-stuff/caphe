@@ -8,3 +8,5 @@
 /website/dist/
 /website/.astro/
 paper.txt
+caphe-audit*
+/deployments/docker/auth.json

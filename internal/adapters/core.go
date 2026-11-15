@@ -30,6 +30,7 @@ func (c *Core) Execute(context.Context, Request) (Result, error) { return Result
 func DefaultRegistry() *Registry {
 	return NewRegistry(
 		NewScanner("scanner.opengrep", "opengrep"), NewScanner("scanner.syft", "syft"), NewScanner("scanner.grype", "grype"), NewScanner("scanner.gitleaks", "gitleaks"), NewScanner("scanner.poutine", "poutine"),
+		NewScanner("scanner.opa", "opa"), NewScanner("scanner.osv", "osv-scanner"), NewScanner("scanner.checkov", "checkov"), NewScanner("scanner.kubescape", "kubescape"),
 		NewCore("core.normalize"), NewCore("core.correlate"), NewCore("core.verify"),
 	)
 }

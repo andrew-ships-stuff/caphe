@@ -21,6 +21,14 @@ npm run test:a11y
 
 The generated site is in `website/dist/`. No Caphe Go source is modified by the website build.
 
+## Brand assets
+
+`public/caphe-logo.png`, `public/caphe-mark.png`, `public/favicon.png`, and `public/apple-touch-icon.png` are generated from the source artwork in the repository-level `assets/` directory, along with the `assets/caphe_logo_640.png` copy used by the top-level README. They are committed so the Pages build stays hermetic. After replacing `assets/caphe_logo.png` or `assets/caphe_simple_logo.png`, regenerate them with:
+
+```bash
+npm run render:brand
+```
+
 ## GitHub Pages
 
 The workflow at `.github/workflows/pages.yml` builds and deploys on pushes to `main`, and supports manual runs. For project Pages, the defaults produce canonical URLs under `https://andrew-ships-stuff.github.io/caphe/` and set Astro's base to `/caphe`.

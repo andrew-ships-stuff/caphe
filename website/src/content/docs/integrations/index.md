@@ -13,10 +13,11 @@ Caphe adapters strictly validate configuration, build argument arrays, discover 
 | [Syft](./syft/) | SBOM | **Available** | `scanner.syft` |
 | [Grype](./grype/) | SCA | **Available** | `scanner.grype` |
 | [Gitleaks](./gitleaks/) | Secrets | **Available** | `scanner.gitleaks` |
-| OPA | Policy | Planned | — |
-| OSV-Scanner | SCA | Planned | — |
-| Checkov | IaC | Planned | — |
-| Kubescape | Kubernetes | Planned | — |
+| Poutine | CI/CD | **Available** | `scanner.poutine` |
+| [OPA](./opa/) | Policy | **Available** | `scanner.opa` |
+| [OSV-Scanner](./osv/) | SCA | **Available** | `scanner.osv` |
+| [Checkov](./checkov/) | IaC | **Available** | `scanner.checkov` |
+| [Kubescape](./kubescape/) | Kubernetes | **Available** | `scanner.kubescape` |
 
 External output is capped at 64 MiB per invocation and stderr at 1 MiB. Version-specific fixture parsing is unit tested; CI against pinned real binaries is still required.
 
