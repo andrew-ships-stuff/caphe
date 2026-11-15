@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,9 +22,9 @@ func (a *app) githubCmd() *cobra.Command {
 }
 
 func (a *app) githubAnalyzeCmd() *cobra.Command {
-	var baseReport, headReport, baseSHA, headSHA, repository, output, summaryOutput, sarifOutput, severity, aiEndpoint, aiModel, aiModelDigest string
-	var pullRequest, maxComments, maxModelCalls, maxInputTokens, maxOutputTokens int
-	var failOnNew, aiEnabled bool
+	var baseReport, headReport, baseSHA, headSHA, repository, output, summaryOutput, sarifOutput, severity, aiEndpoint, aiModel, aiModelDigest, aiModelURL, aiLlamaServer string
+	var pullRequest, maxComments, maxModelCalls, maxInputTokens, maxOutputTokens, aiThreads int
+	var failOnNew, aiEnabled, aiServe bool
 	var maxInferenceTime time.Duration
 	command := &cobra.Command{Use: "analyze", Short: "Compare base/head findings and create a signed-by-digest PR review artifact", RunE: func(cmd *cobra.Command, _ []string) error {
 		if baseReport == "" || headReport == "" || baseSHA == "" || headSHA == "" || repository == "" || pullRequest <= 0 || output == "" {
@@ -53,6 +54,21 @@ func (a *app) githubAnalyzeCmd() *cobra.Command {
 		if aiEnabled {
 			if aiModel == "" || aiModelDigest == "" {
 				return fmt.Errorf("--ai-model and --ai-model-digest are required with --ai")
+			}
+			if aiServe {
+				if aiModelURL == "" {
+					return fmt.Errorf("--ai-model-url is required with --ai-serve")
+				}
+				modelPath, err := inference.EnsureModel(cmd.Context(), filepath.Join(a.dataDir, "models"), aiModelURL, aiModelDigest)
+				if err != nil {
+					return err
+				}
+				server, err := inference.StartServer(cmd.Context(), inference.ServerOptions{Binary: aiLlamaServer, ModelPath: modelPath, Threads: aiThreads})
+				if err != nil {
+					return err
+				}
+				defer server.Stop()
+				aiEndpoint = server.Endpoint
 			}
 			provider, err := inference.NewLlamaCPP(aiEndpoint, maxInferenceTime)
 			if err != nil {
@@ -125,6 +141,10 @@ func (a *app) githubAnalyzeCmd() *cobra.Command {
 	command.Flags().IntVar(&maxInputTokens, "max-input-tokens", 2048, "maximum input tokens per model call")
 	command.Flags().IntVar(&maxOutputTokens, "max-output-tokens", 256, "maximum output tokens per model call")
 	command.Flags().DurationVar(&maxInferenceTime, "max-inference-time", 5*time.Minute, "maximum total inference time")
+	command.Flags().BoolVar(&aiServe, "ai-serve", false, "launch a private llama-server subprocess on an ephemeral loopback port")
+	command.Flags().StringVar(&aiModelURL, "ai-model-url", "", "HTTPS model URL downloaded and digest-verified before serving")
+	command.Flags().StringVar(&aiLlamaServer, "ai-llama-server", "", "explicit llama-server binary; defaults to CAPHE_LLAMA_SERVER, managed tools, then PATH")
+	command.Flags().IntVar(&aiThreads, "ai-threads", 0, "llama-server CPU threads (0 selects the llama.cpp default)")
 	return command
 }
 

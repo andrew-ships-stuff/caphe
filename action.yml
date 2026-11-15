@@ -39,7 +39,7 @@ inputs:
     required: false
     default: '10'
   ai:
-    description: Enable an already-provisioned local llama.cpp endpoint
+    description: Enable local CPU inference via llama.cpp
     required: false
     default: 'false'
   ai-model:
@@ -51,9 +51,25 @@ inputs:
     required: false
     default: ''
   ai-endpoint:
-    description: Loopback-only llama.cpp endpoint
+    description: Loopback-only llama.cpp endpoint (used when ai-serve is false)
     required: false
     default: http://127.0.0.1:8080
+  ai-serve:
+    description: Launch a private llama-server subprocess on an ephemeral loopback port (installs the managed llama.cpp tool and downloads the model)
+    required: false
+    default: 'false'
+  ai-model-url:
+    description: HTTPS model URL downloaded and sha256-verified into the model cache when ai-serve is true
+    required: false
+    default: ''
+  ai-llama-server:
+    description: Explicit llama-server binary; defaults to CAPHE_LLAMA_SERVER, then the managed tool, then PATH
+    required: false
+    default: ''
+  ai-threads:
+    description: llama-server CPU threads (0 selects the llama.cpp default)
+    required: false
+    default: '0'
   max-model-calls:
     description: Maximum model calls for this PR
     required: false
@@ -105,6 +121,10 @@ runs:
         CAPHE_AI_MODEL: ${{ inputs.ai-model }}
         CAPHE_AI_MODEL_DIGEST: ${{ inputs.ai-model-digest }}
         CAPHE_AI_ENDPOINT: ${{ inputs.ai-endpoint }}
+        CAPHE_AI_SERVE: ${{ inputs.ai-serve }}
+        CAPHE_AI_MODEL_URL: ${{ inputs.ai-model-url }}
+        CAPHE_AI_LLAMA_SERVER: ${{ inputs.ai-llama-server }}
+        CAPHE_AI_THREADS: ${{ inputs.ai-threads }}
         CAPHE_MAX_MODEL_CALLS: ${{ inputs.max-model-calls }}
         CAPHE_MAX_INPUT_TOKENS: ${{ inputs.max-input-tokens }}
         CAPHE_MAX_OUTPUT_TOKENS: ${{ inputs.max-output-tokens }}

@@ -184,6 +184,20 @@ func TestGitHubPRAnalyzeValidateAnnotateAndDryRunPublish(t *testing.T) {
 	if !strings.Contains(published, `"dryRun": true`) {
 		t.Fatalf("unexpected dry-run result: %s", published)
 	}
+	serveMissingURL := runFailure(t, fixture, nil, binary, "github", "analyze", "--base-report", baseReport, "--head-report", headReport, "--base-sha", baseSHA, "--head-sha", headSHA, "--repository", "owner/repository", "--pr", "7", "--output", artifact, "--ai", "--ai-serve", "--ai-model", "test-model", "--ai-model-digest", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if !strings.Contains(serveMissingURL, "--ai-model-url is required") {
+		t.Fatalf("expected --ai-serve to require --ai-model-url, got: %s", serveMissingURL)
+	}
+	aiMissingModel := runFailure(t, fixture, nil, binary, "github", "analyze", "--base-report", baseReport, "--head-report", headReport, "--base-sha", baseSHA, "--head-sha", headSHA, "--repository", "owner/repository", "--pr", "7", "--output", artifact, "--ai")
+	if !strings.Contains(aiMissingModel, "--ai-model and --ai-model-digest are required") {
+		t.Fatalf("expected --ai to require model and digest, got: %s", aiMissingModel)
+	}
+	for _, flag := range []string{"--ai-serve", "--ai-model-url", "--ai-llama-server", "--ai-threads"} {
+		usage := run(t, fixture, nil, binary, "github", "analyze", "--help")
+		if !strings.Contains(usage, flag) {
+			t.Fatalf("expected analyze --help to advertise %s", flag)
+		}
+	}
 	data, err := os.ReadFile(artifact)
 	if err != nil {
 		t.Fatal(err)

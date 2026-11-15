@@ -35,7 +35,12 @@ jobs:
           severity-threshold: high
           fail-on-new: 'true'
           max-comments: '5'
-          ai: 'false'
+          ai: 'true'
+          ai-serve: 'true'
+          ai-threads: '4'
+          ai-model: 'Qwen2.5-1.5B-Instruct-Q4_K_M.gguf'
+          ai-model-url: 'https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf'
+          ai-model-digest: 'sha256:1adf0b11065d8ad2e8123ea110d1ec956dab4ab038eab665614adba04b6c3370'
       - name: Upload untrusted analysis artifact
         if: ${{ always() && steps.caphe.outputs.review-artifact != '' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

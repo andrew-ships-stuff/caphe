@@ -26,8 +26,11 @@ fi
 [[ -x "$caphe_binary" ]] || { echo "Caphe binary is not executable" >&2; exit 2; }
 
 tool_bin="$action_state/tools"
-bash "$CAPHE_ACTION_PATH/scripts/install-tools.sh" --bin-dir "$tool_bin" --tools poutine
+caphe_tools="poutine"
+if [[ "${CAPHE_AI:-false}" == true && "${CAPHE_AI_SERVE:-false}" == true ]]; then caphe_tools="poutine,llama.cpp"; fi
+CAPHE_TOOL_BIN="$tool_bin" bash "$CAPHE_ACTION_PATH/scripts/install-tools.sh" --bin-dir "$tool_bin" --tools "$caphe_tools"
 export PATH="$tool_bin:$PATH"
+export CAPHE_TOOL_BIN="$tool_bin"
 
 workflow="$CAPHE_WORKFLOW"
 if [[ "$workflow" == caphe:git-security ]]; then workflow="$CAPHE_ACTION_PATH/workflows/git-security.yaml"; fi
@@ -52,7 +55,13 @@ sarif="$GITHUB_WORKSPACE/caphe-pr.sarif"
 args=(github analyze --base-report "$base_report" --head-report "$head_report" --base-sha "$CAPHE_BASE_SHA" --head-sha "$CAPHE_HEAD_SHA" --repository "$CAPHE_REPOSITORY" --pr "$CAPHE_PR" --output "$review" --summary-output "$summary" --sarif-output "$sarif" --severity-threshold "${CAPHE_SEVERITY:-high}" --max-comments "${CAPHE_MAX_COMMENTS:-10}" --json)
 if [[ "${CAPHE_FAIL_ON_NEW:-true}" == true ]]; then args+=(--fail-on-new); fi
 if [[ "${CAPHE_AI:-false}" == true ]]; then
-  args+=(--ai --ai-endpoint "${CAPHE_AI_ENDPOINT:-http://127.0.0.1:8080}" --ai-model "${CAPHE_AI_MODEL:-}" --ai-model-digest "${CAPHE_AI_MODEL_DIGEST:-}" --max-model-calls "${CAPHE_MAX_MODEL_CALLS:-3}" --max-input-tokens "${CAPHE_MAX_INPUT_TOKENS:-2048}" --max-output-tokens "${CAPHE_MAX_OUTPUT_TOKENS:-256}" --max-inference-time "${CAPHE_MAX_INFERENCE_TIME:-5m}")
+  args+=(--ai --ai-model "${CAPHE_AI_MODEL:-}" --ai-model-digest "${CAPHE_AI_MODEL_DIGEST:-}" --max-model-calls "${CAPHE_MAX_MODEL_CALLS:-3}" --max-input-tokens "${CAPHE_MAX_INPUT_TOKENS:-2048}" --max-output-tokens "${CAPHE_MAX_OUTPUT_TOKENS:-256}" --max-inference-time "${CAPHE_MAX_INFERENCE_TIME:-5m}")
+  if [[ "${CAPHE_AI_SERVE:-false}" == true ]]; then
+    args+=(--ai-serve --ai-model-url "${CAPHE_AI_MODEL_URL:-}" --ai-threads "${CAPHE_AI_THREADS:-0}")
+    if [[ -n "${CAPHE_AI_LLAMA_SERVER:-}" ]]; then args+=(--ai-llama-server "${CAPHE_AI_LLAMA_SERVER}"); fi
+  else
+    args+=(--ai-endpoint "${CAPHE_AI_ENDPOINT:-http://127.0.0.1:8080}")
+  fi
 fi
 set +e
 "$caphe_binary" "${args[@]}"
