@@ -11,7 +11,7 @@ The deterministic engine does not require an LLM, GPU, Kubernetes, Docker, API k
 ## Current working scope
 
 - Go CLI: `version`, `doctor`, `init`, hardware inspection, tool discovery, workflow validation/compilation/lock validation, scan/run, findings, graph queries, reports, and AI status/recommendation.
-- Real installed-tool adapters for Opengrep, Syft, Grype, Gitleaks, and Poutine. No production mock fallback exists.
+- Real installed-tool adapters for Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. No production mock fallback exists.
 - Canonical workflow locks with adapter pinning, bounded timeout/retry policy, security/syntax gate records, and SHA-256 digests.
 - Dependency-aware concurrent executor with partial failure, cancellation, raw artifact retention, and execution manifests.
 - SQLite findings/evidence store and content-addressed artifact files.
@@ -39,7 +39,7 @@ Scanners are optional per workflow. Install the tools required by the selected w
 caphe tools doctor
 ```
 
-Caphe never silently substitutes generated findings when a scanner is missing. On macOS, Linux, and Windows, install scanner releases from their respective upstream projects: Opengrep, Anchore Syft, Anchore Grype, Gitleaks, and Poutine. Pin versions in CI and preserve the execution manifest that records detected versions.
+Caphe never silently substitutes generated findings when a scanner is missing. On macOS, Linux, and Windows, install scanner releases from their respective upstream projects: Opengrep, Anchore Syft, Anchore Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Pin versions in CI and preserve the execution manifest that records detected versions.
 
 For an easily removable local toolchain, Caphe can install checksum-verified Poutine and actionlint releases into its own cache:
 
@@ -54,10 +54,10 @@ Set `CAPHE_CACHE` or pass `scripts/install-tools.sh --bin-dir PATH` to choose an
 Homebrew users can install commonly used tools independently:
 
 ```bash
-brew install poutine syft grype gitleaks osv-scanner actionlint
+brew install poutine syft grype gitleaks opa osv-scanner checkov kubescape actionlint
 ```
 
-Poutine, Syft, Grype, and Gitleaks currently have Caphe adapters. OSV-Scanner and actionlint are useful companion tools but do not yet have workflow adapters.
+`scripts/install-tools.sh` only manages tools with reviewed version and checksum pins. Install OPA, OSV-Scanner, Checkov, and Kubescape independently until equivalent pins are added; Caphe will discover them from `PATH`. actionlint remains a repository/CI companion rather than a workflow adapter.
 
 ## Homebrew installation
 
@@ -138,6 +138,33 @@ spec:
 ```
 
 Caphe passes scanner arguments as an argument array, never through a shell. Repository content remains untrusted; ordinary subprocess execution is not a strong sandbox. Read [docs/security.md](docs/security.md) before scanning hostile repositories.
+
+The additional adapters can be selected in any custom workflow:
+
+```yaml
+tasks:
+  - id: dependency-vulnerabilities
+    uses: scanner.osv
+    optional: true
+    with: {offline: true}
+  - id: infrastructure
+    uses: scanner.checkov
+    optional: true
+    with: {framework: "terraform,kubernetes"}
+  - id: kubernetes
+    uses: scanner.kubescape
+    optional: true
+    with: {useArtifactsFrom: .kubescape}
+  - id: policy
+    uses: scanner.opa
+    optional: true
+    with:
+      policy: policy/deny.rego
+      input: policy/input.json
+      query: data.caphe.deny
+```
+
+OPA queries should return a boolean, string, or collection of objects. Object results may include `id`, `message`, `severity`, `path`, and `line`. OSV-Scanner normally uses its remote vulnerability database; set `offline: true` after pre-downloading its local database. Checkov runs with result upload and policy downloads disabled. Set Kubescape's `useArtifactsFrom` to a pre-downloaded artifact directory when it must remain offline.
 
 ## License
 

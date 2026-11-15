@@ -87,7 +87,6 @@ install_llama_cpp() {
 
 install_release_binary() {
   local name="$1" repo="$2" version="$3" asset="$4" expected="$5"
-  if [[ -x "$BIN_DIR/$name" ]]; then echo "$name already installed at $BIN_DIR/$name"; return 0; fi
   curl -fsSL "https://github.com/$repo/releases/download/v${version}/${asset}" -o "$tmp_dir/$asset"
   local actual; actual=$(sha256_of "$tmp_dir/$asset")
   [[ "$actual" == "$expected" ]] || { echo "checksum mismatch for $asset" >&2; return 1; }

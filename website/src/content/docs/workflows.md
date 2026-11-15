@@ -46,6 +46,8 @@ spec:
 
 Compilation rejects unknown adapter settings, executable or command overrides, control characters, missing dependencies, cycles, negative resources, more than five retries, and timeouts over one hour.
 
+External adapter IDs are `scanner.opengrep`, `scanner.syft`, `scanner.grype`, `scanner.gitleaks`, `scanner.poutine`, `scanner.opa`, `scanner.osv`, `scanner.checkov`, and `scanner.kubescape`. See [Integrations](../integrations/) for each adapter's accepted configuration and scanner-owned network behavior.
+
 ## Compilation and validation
 
 ```bash

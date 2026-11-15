@@ -22,9 +22,10 @@ caphe compile WORKFLOW [-o|--output workflow.lock.json]
 caphe validate LOCKFILE
 caphe run LOCKFILE [--target .] [--concurrency N]
 caphe scan TARGET [--workflow FILE] [--concurrency N]
+caphe audit [TARGET] [--workflow FILE] [--concurrency N]
 ```
 
-`scan` compiles and runs in one process. With no `--workflow`, it loads `workflows/default.yaml` relative to the current working directory. `run` validates a compiled lock before execution.
+`scan` compiles and runs in one process. With no `--workflow`, both `scan` and `audit` load the embedded `caphe:default` workflow. `audit` also correlates evidence and writes digest-pinned JSON, SARIF, Markdown, and HTML outputs. `run` validates a compiled lock before execution.
 
 ## Inspect the installation
 
@@ -36,6 +37,8 @@ caphe scan TARGET [--workflow FILE] [--concurrency N]
 | `caphe hardware inspect` | Report CPU, memory, disk, container, and declared limit data. |
 | `caphe tools list` | List detected registered scanner adapters. |
 | `caphe tools doctor` | Inspect the same scanner detection information for diagnostics. |
+
+The tool commands include Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Detection does not install a tool or silently replace a missing executable.
 
 ## Findings, graph, and reports
 

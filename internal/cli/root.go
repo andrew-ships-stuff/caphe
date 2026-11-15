@@ -17,6 +17,7 @@ import (
 
 	"github.com/andrew-ships-stuff/caphe/internal/adapters"
 	"github.com/andrew-ships-stuff/caphe/internal/artifacts"
+	"github.com/andrew-ships-stuff/caphe/internal/audit"
 	caphebenchmark "github.com/andrew-ships-stuff/caphe/internal/benchmark"
 	"github.com/andrew-ships-stuff/caphe/internal/compiler"
 	"github.com/andrew-ships-stuff/caphe/internal/hardware"
@@ -330,7 +331,36 @@ func (a *app) graphCmd() *cobra.Command {
 }
 func (a *app) reportCmd() *cobra.Command {
 	var format, out string
-	c := &cobra.Command{Use: "report", Short: "Generate a report from persisted findings", RunE: func(cmd *cobra.Command, _ []string) error {
+	c := &cobra.Command{Use: "report [AUDIT_BUNDLE]", Args: cobra.MaximumNArgs(1), Short: "Generate a report from persisted findings or an audit bundle", RunE: func(cmd *cobra.Command, args []string) error {
+		w := a.stdout
+		var f *os.File
+		var err error
+		if out != "" && out != "-" {
+			f, err = os.Create(out)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			w = f
+		}
+		if len(args) == 1 {
+			bundle, err := audit.ReadJSON(args[0])
+			if err != nil {
+				return err
+			}
+			switch format {
+			case "json":
+				encoder := json.NewEncoder(w)
+				encoder.SetIndent("", "  ")
+				return encoder.Encode(bundle)
+			case "sarif":
+				return reporting.SARIF(w, bundle.Findings)
+			case "html":
+				return audit.RenderHTML(w, bundle)
+			default:
+				return fmt.Errorf("unsupported format %q", format)
+			}
+		}
 		s, err := a.initState()
 		if err != nil {
 			return err
@@ -339,16 +369,6 @@ func (a *app) reportCmd() *cobra.Command {
 		items, err := s.ListFindings(cmd.Context())
 		if err != nil {
 			return err
-		}
-		w := a.stdout
-		var f *os.File
-		if out != "" && out != "-" {
-			f, err = os.Create(out)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			w = f
 		}
 		switch format {
 		case "json":

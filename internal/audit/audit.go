@@ -21,6 +21,7 @@ import (
 	"github.com/andrew-ships-stuff/caphe/internal/compiler"
 	"github.com/andrew-ships-stuff/caphe/internal/findings"
 	"github.com/andrew-ships-stuff/caphe/internal/inference"
+	"github.com/andrew-ships-stuff/caphe/internal/source"
 	"github.com/andrew-ships-stuff/caphe/internal/storage"
 
 	"github.com/andrew-ships-stuff/caphe/internal/workflow"
@@ -136,6 +137,14 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 	if options.DataDir == "" {
 		return Bundle{}, fmt.Errorf("data directory is required")
 	}
+	if err := validateAIOptions(options.AI); err != nil {
+		return Bundle{}, err
+	}
+	prepared, err := source.Prepare(options.Target)
+	if err != nil {
+		return Bundle{}, err
+	}
+	defer prepared.Cleanup()
 	workflowDefinition, err := workflow.Load(options.Workflow)
 	if err != nil {
 		return Bundle{}, err
@@ -153,11 +162,11 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 	}
 	defer store.Close()
 	executor := capheruntime.New(options.Registry, artifacts.New(filepath.Join(options.DataDir, "artifacts")), store, options.Concurrency)
-	manifest, runErr := executor.Run(ctx, plan, options.Target)
+	manifest, runErr := executor.Run(ctx, plan, prepared.Path)
 	if runErr != nil {
 		return Bundle{}, fmt.Errorf("workflow execution failed: %w", runErr)
 	}
-	items, err := store.ListFindings(ctx)
+	items, err := store.ListFindingsForExecution(ctx, manifest.ExecutionID)
 	if err != nil {
 		return Bundle{}, err
 	}
@@ -189,6 +198,22 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 	return bundle, nil
 }
 
+func validateAIOptions(ai AIOptions) error {
+	if !ai.Enabled {
+		return nil
+	}
+	if ai.Model == "" || ai.ModelDigest == "" {
+		return fmt.Errorf("--ai-model and --ai-model-digest are required with --ai")
+	}
+	if ai.Serve && ai.ModelURL == "" {
+		return fmt.Errorf("--ai-model-url is required with --ai-serve")
+	}
+	if ai.MaxCalls <= 0 || ai.MaxCalls > 20 || ai.MaxInputTokens <= 0 || ai.MaxInputTokens > 8192 || ai.MaxOutputTokens <= 0 || ai.MaxOutputTokens > 1024 || ai.MaxTotalTime <= 0 || ai.MaxTotalTime > 30*time.Minute {
+		return fmt.Errorf("invalid AI budget")
+	}
+	return nil
+}
+
 func locationSuffix(finding findings.Finding) string {
 	if finding.Location.Path == "" {
 		return ""
@@ -202,17 +227,8 @@ func locationSuffix(finding findings.Finding) string {
 func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 	ai := &options.AI
 	bundle.AI = AIInfo{Enabled: true, Model: ai.Model, ModelDigest: ai.ModelDigest, Endpoint: ai.Endpoint}
-	if ai.Model == "" || ai.ModelDigest == "" {
-		return fmt.Errorf("--ai-model and --ai-model-digest are required with --ai")
-	}
-	if ai.MaxCalls <= 0 || ai.MaxCalls > 20 || ai.MaxInputTokens <= 0 || ai.MaxInputTokens > 8192 || ai.MaxOutputTokens <= 0 || ai.MaxOutputTokens > 1024 || ai.MaxTotalTime <= 0 || ai.MaxTotalTime > 30*time.Minute {
-		return fmt.Errorf("invalid AI budget")
-	}
 	endpoint := ai.Endpoint
 	if ai.Serve {
-		if ai.ModelURL == "" {
-			return fmt.Errorf("--ai-model-url is required with --ai-serve")
-		}
 		modelPath, err := inference.EnsureModel(ctx, filepath.Join(options.DataDir, "models"), ai.ModelURL, ai.ModelDigest)
 		if err != nil {
 			return err

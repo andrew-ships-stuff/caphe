@@ -40,7 +40,7 @@ The executor chooses runnable tasks only from declared dependencies. Ready tasks
 
 Adapters own discovery, strict configuration validation, argument construction, timeout and cancellation, bounded output capture, JSON parsing, normalization, and provenance. Commands are passed as executable plus argument array—never through `sh -c`.
 
-Implemented external adapters are Opengrep, Syft, Grype, and Gitleaks. Core adapters normalize, correlate the currently supported exact source relationships, and provide a verification foundation.
+Implemented external adapters are Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Core adapters normalize, correlate the currently supported exact source relationships, and provide a verification foundation.
 
 ## Evidence and storage
 

@@ -37,6 +37,31 @@ func TestFindingRoundTripAndGraphNode(t *testing.T) {
 	}
 }
 
+func TestListFindingsForExecutionDoesNotUseLatestRun(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := t.Context()
+	for _, id := range []string{"e1", "e2"} {
+		if err := s.BeginExecution(ctx, id, "sha256:x", "."); err != nil {
+			t.Fatal(err)
+		}
+		f := findings.Finding{ID: "finding-" + id, Fingerprint: "finding-" + id, Tool: "scanner.test", RuleID: id, Title: id}
+		if err := s.SaveFindings(ctx, id, []findings.Finding{f}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.ListFindingsForExecution(ctx, "e1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != "finding-e1" {
+		t.Fatalf("unexpected findings: %#v", got)
+	}
+}
+
 func TestAICacheAndHypothesisRemainHypothesized(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

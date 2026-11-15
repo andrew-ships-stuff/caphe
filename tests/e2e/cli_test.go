@@ -251,8 +251,9 @@ printf '%s\n' '{"runs":[{"results":[{"ruleId":"untrusted-checkout-exec","level":
 	bundlePath := filepath.Join(temp, "bundle.json")
 	sarifPath := filepath.Join(temp, "bundle.sarif")
 	markdownPath := filepath.Join(temp, "bundle.md")
+	htmlPath := filepath.Join(temp, "bundle.html")
 	env := append(os.Environ(), "PATH="+toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	out := run(t, temp, env, binary, "audit", target, "-o", bundlePath, "--sarif-output", sarifPath, "--markdown-output", markdownPath, "--data-dir", filepath.Join(temp, "state"), "--json")
+	out := run(t, temp, env, binary, "audit", target, "-o", bundlePath, "--sarif-output", sarifPath, "--markdown-output", markdownPath, "--html-output", htmlPath, "--data-dir", filepath.Join(temp, "state"), "--json")
 	if !strings.Contains(out, `"findings": 5`) || !strings.Contains(out, "sha256:") {
 		t.Fatalf("audit summary missing aggregate metrics: %s", out)
 	}
@@ -297,13 +298,26 @@ printf '%s\n' '{"runs":[{"results":[{"ruleId":"untrusted-checkout-exec","level":
 	if err != nil || !strings.Contains(string(markdown), "Caphe security audit") {
 		t.Fatalf("markdown report missing: %v", err)
 	}
-	degraded := run(t, temp, []string{"PATH=/usr/bin:/bin"}, binary, "audit", target, "-o", filepath.Join(temp, "degraded.json"), "--sarif-output", "", "--markdown-output", "", "--data-dir", filepath.Join(temp, "degraded-state"), "--json")
+	html, err := os.ReadFile(htmlPath)
+	if err != nil || !strings.Contains(string(html), "Caphe security posture") || !strings.Contains(string(html), "nvd.nist.gov/vuln/detail") {
+		t.Fatalf("interactive HTML report missing: %v", err)
+	}
+	renderedPath := filepath.Join(temp, "rendered.html")
+	run(t, temp, env, binary, "report", bundlePath, "--format", "html", "--output", renderedPath)
+	if rendered, err := os.ReadFile(renderedPath); err != nil || !strings.Contains(string(rendered), "Search findings") {
+		t.Fatalf("bundle-to-HTML report missing: %v", err)
+	}
+	degraded := run(t, target, []string{"PATH=/usr/bin:/bin"}, binary, "audit", "-o", filepath.Join(temp, "degraded.json"), "--sarif-output", "", "--markdown-output", "", "--html-output", "", "--data-dir", filepath.Join(temp, "degraded-state"), "--json")
 	if !strings.Contains(degraded, `"status": "succeeded"`) || !strings.Contains(degraded, `"findings": 0`) {
 		t.Fatalf("audit must succeed with all scanners missing: %s", degraded)
 	}
-	missingModel := runFailure(t, temp, env, binary, "audit", target, "-o", filepath.Join(temp, "ai.json"), "--data-dir", filepath.Join(temp, "ai-state"), "--ai")
+	aiState := filepath.Join(temp, "ai-state")
+	missingModel := runFailure(t, temp, env, binary, "audit", target, "-o", filepath.Join(temp, "ai.json"), "--data-dir", aiState, "--ai")
 	if !strings.Contains(missingModel, "--ai-model and --ai-model-digest are required") {
 		t.Fatalf("expected AI flag validation, got: %s", missingModel)
+	}
+	if _, err := os.Stat(aiState); !os.IsNotExist(err) {
+		t.Fatalf("invalid AI options must fail before audit state is created: %v", err)
 	}
 }
 

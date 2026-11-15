@@ -15,6 +15,14 @@ Core invariants agents must preserve:
 - LLM is optional, loopback-only (`127.0.0.1`), budgeted (calls/tokens/time), model digest-verified, and its output is **always** labeled `hypothesis` — never promoted to a confirmed finding and never allowed to determine policy.
 - Missing optional scanners degrade to `skipped` tasks, never fabricated findings and never failed runs.
 
+## GitHub project governance
+
+- `main` is protected and accepts changes through pull requests only. Never push directly, force-push, delete the branch, or bypass required checks; use a short-lived branch and let GitHub enforce the merge gate.
+- Attribute every change to a tracked GitHub work item: link the pull request to its issue or originating [Discussion](https://github.com/andrew-ships-stuff/caphe/discussions), and assign it to the active [milestone](https://github.com/andrew-ships-stuff/caphe/milestones). Use closing keywords for issues when the PR fully resolves them.
+- Use Discussions for proposals, questions, and decisions that should be settled before implementation. Summarize the decision in the linked PR so the code history retains the rationale.
+- Keep durable contributor and operational guidance in the [wiki](https://github.com/andrew-ships-stuff/caphe/wiki). Update the relevant wiki page in the same work item when a change invalidates it; repository-local technical truth still belongs in versioned docs and code.
+- Before handing off a change, report the linked issue or Discussion, milestone, branch, and pull request. If any attribution is unavailable, call it out explicitly instead of silently leaving the change untracked.
+
 ## Concurrent agent rules (read first)
 
 Multiple agents and humans write to this working tree **at the same time**. Assume the index and neighboring files are contaminated until proven otherwise.

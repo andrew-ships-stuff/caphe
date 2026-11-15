@@ -1,6 +1,11 @@
 package adapters
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -52,6 +57,127 @@ func TestParsePoutineSARIF(t *testing.T) {
 		t.Fatalf("unexpected parse: %#v", r)
 	}
 }
+
+func TestParseOSV(t *testing.T) {
+	raw := []byte(`{"results":[{"source":{"path":"go.mod","type":"lockfile"},"packages":[{"package":{"name":"example.org/bad","version":"1.0.0","ecosystem":"Go"},"vulnerabilities":[{"id":"GO-2026-0001","summary":"bad package","database_specific":{"severity":"HIGH"}}]}]}]}`)
+	r, err := ParseScannerOutput("scanner.osv", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 1 || r.Findings[0].RuleID != "GO-2026-0001" || r.Findings[0].Severity != findings.SeverityHigh || r.Findings[0].Location.Path != "go.mod" {
+		t.Fatalf("unexpected parse: %#v", r)
+	}
+}
+
+func TestParseCheckovSingleAndMultiFramework(t *testing.T) {
+	raw := []byte(`[{"check_type":"terraform","results":{"failed_checks":[{"check_id":"CKV_AWS_1","check_name":"Encrypt storage","file_path":"/main.tf","file_line_range":[4,8],"severity":"MEDIUM"}]}},{"check_type":"kubernetes","results":{"failed_checks":[{"check_id":"CKV_K8S_1","check_name":"Drop capabilities","file_path":"/pod.yaml","file_line_range":[9,12]}]}}]`)
+	r, err := ParseScannerOutput("scanner.checkov", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 2 || r.Findings[0].Location.Path != "main.tf" || r.Findings[0].Location.StartLine != 4 || r.Findings[1].RuleID != "CKV_K8S_1" {
+		t.Fatalf("unexpected parse: %#v", r)
+	}
+}
+
+func TestParseKubescapeSARIF(t *testing.T) {
+	raw := []byte(`{"version":"2.1.0","runs":[{"results":[{"ruleId":"C-0013","level":"warning","message":{"text":"Privileged container"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":"deploy.yaml"},"region":{"startLine":17}}}]}]}]}`)
+	r, err := ParseScannerOutput("scanner.kubescape", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 1 || r.Findings[0].Tool != "scanner.kubescape" || r.Findings[0].Location.StartLine != 17 {
+		t.Fatalf("unexpected parse: %#v", r)
+	}
+}
+
+func TestParseOPAResultContract(t *testing.T) {
+	raw := []byte(`{"result":[{"expressions":[{"value":[{"id":"deny-public-bucket","message":"bucket is public","severity":"high","path":"infra/main.tf","line":12}]}]}]}`)
+	r, err := ParseScannerOutput("scanner.opa", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 1 || r.Findings[0].RuleID != "deny-public-bucket" || r.Findings[0].Severity != findings.SeverityHigh || r.Findings[0].Location.StartLine != 12 {
+		t.Fatalf("unexpected parse: %#v", r)
+	}
+}
+
+func TestNewScannerArgumentsAndValidation(t *testing.T) {
+	tests := []struct {
+		id     string
+		binary string
+		config map[string]any
+		want   []string
+	}{
+		{id: "scanner.osv", binary: "osv-scanner", config: map[string]any{"offline": true}, want: []string{"scan", "source", "--format", "json", "--recursive", "--offline", "."}},
+		{id: "scanner.checkov", binary: "checkov", config: map[string]any{"framework": "terraform,kubernetes"}, want: []string{"-d", ".", "-o", "json", "--soft-fail", "--skip-results-upload", "--skip-download", "--framework", "terraform,kubernetes"}},
+		{id: "scanner.kubescape", binary: "kubescape", config: map[string]any{"useArtifactsFrom": ".kubescape"}, want: []string{"scan", ".", "--format", "sarif", "--use-artifacts-from", ".kubescape"}},
+		{id: "scanner.opa", binary: "opa", config: map[string]any{"policy": "policy/deny.rego", "query": "data.caphe.deny", "input": "input.json"}, want: []string{"eval", "--format", "json", "--data", "policy/deny.rego", "--input", "input.json", "data.caphe.deny"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			scanner := NewScanner(tt.id, tt.binary)
+			raw, err := json.Marshal(tt.config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := scanner.Validate(raw); err != nil {
+				t.Fatal(err)
+			}
+			got, err := scanner.args(".", tt.config, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("args = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+
+	opa := NewScanner("scanner.opa", "opa")
+	for _, raw := range []json.RawMessage{json.RawMessage(`{}`), json.RawMessage(`{"policy":"../escape.rego","query":"data.deny"}`), json.RawMessage(`{"policy":"policy.rego","query":"-bad"}`), json.RawMessage(`{"policy":"policy.rego","query":"data.deny","extra":true}`)} {
+		if err := opa.Validate(raw); err == nil {
+			t.Fatalf("invalid OPA configuration accepted: %s", raw)
+		}
+	}
+}
+
+func TestDefaultRegistryIncludesPlannedScanners(t *testing.T) {
+	registry := DefaultRegistry()
+	for _, id := range []string{"scanner.opa", "scanner.osv", "scanner.checkov", "scanner.kubescape"} {
+		if _, ok := registry.Get(id); !ok {
+			t.Fatalf("%s is not registered", id)
+		}
+	}
+}
+
+func TestOSVFindingExitCodeIsSuccessful(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a POSIX fake executable")
+	}
+	dir := t.TempDir()
+	tool := filepath.Join(dir, "osv-scanner")
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo 'osv-scanner 2.0.0'
+  exit 0
+fi
+printf '%s\n' '{"results":[{"source":{"path":"go.mod"},"packages":[{"package":{"name":"bad","version":"1.0"},"vulnerabilities":[{"id":"OSV-1"}]}]}]}'
+exit 1
+`
+	if err := os.WriteFile(tool, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	result, err := NewScanner("scanner.osv", "osv-scanner").Execute(t.Context(), Request{Target: dir, Config: json.RawMessage(`{}`), MaxOutput: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExitCode != 1 || len(result.Findings.Findings) != 1 {
+		t.Fatalf("finding exit was not preserved: %#v", result)
+	}
+}
+
 func TestRunCommandOutputLimit(t *testing.T) {
 	_, _, _, err := RunCommand(t.Context(), ".", "sh", []string{"-c", "printf 123456789"}, 4)
 	if err != ErrOutputLimit {

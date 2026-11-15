@@ -8,7 +8,7 @@ import (
 )
 
 func (a *app) auditCmd() *cobra.Command {
-	var workflowRef, output, sarifOutput, markdownOutput, aiEndpoint, aiModel, aiModelDigest, aiModelURL, aiLlamaServer string
+	var workflowRef, output, sarifOutput, markdownOutput, htmlOutput, aiEndpoint, aiModel, aiModelDigest, aiModelURL, aiLlamaServer string
 	var concurrency, aiThreads, maxModelCalls, maxInputTokens, maxOutputTokens int
 	var aiEnabled, aiServe bool
 	var maxInferenceTime time.Duration
@@ -36,12 +36,18 @@ func (a *app) auditCmd() *cobra.Command {
 				return err
 			}
 		}
-		return a.print(map[string]any{"bundle": output, "sarif": sarifOutput, "markdown": markdownOutput, "digest": bundle.Digest, "status": bundle.Status, "metrics": bundle.Metrics, "synthesis": bundle.Synthesis != nil, "ai": bundle.AI})
+		if htmlOutput != "" {
+			if err := audit.WriteHTML(htmlOutput, bundle); err != nil {
+				return err
+			}
+		}
+		return a.print(map[string]any{"bundle": output, "sarif": sarifOutput, "markdown": markdownOutput, "html": htmlOutput, "digest": bundle.Digest, "status": bundle.Status, "metrics": bundle.Metrics, "synthesis": bundle.Synthesis != nil, "ai": bundle.AI})
 	}}
 	command.Flags().StringVar(&workflowRef, "workflow", "caphe:default", "workflow YAML or caphe:<bundled-name>; default aggregates opengrep, syft, grype, gitleaks, and poutine with graceful degradation")
 	command.Flags().StringVarP(&output, "output", "o", "caphe-audit.json", "bundle JSON output (empty skips)")
 	command.Flags().StringVar(&sarifOutput, "sarif-output", "caphe-audit.sarif", "SARIF output (empty skips)")
 	command.Flags().StringVar(&markdownOutput, "markdown-output", "caphe-audit.md", "Markdown report output (empty skips)")
+	command.Flags().StringVar(&htmlOutput, "html-output", "caphe-audit.html", "self-contained interactive HTML report (empty skips)")
 	command.Flags().IntVar(&concurrency, "concurrency", 0, "maximum concurrent scanner tasks (0 uses all cores)")
 	command.Flags().BoolVar(&aiEnabled, "ai", false, "enable optional local CPU inference for recommendations and repo synthesis")
 	command.Flags().BoolVar(&aiServe, "ai-serve", false, "launch a private llama-server subprocess on an ephemeral loopback port")
