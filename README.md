@@ -21,7 +21,7 @@ The deterministic engine does not require an LLM, GPU, Kubernetes, Docker, API k
 - Canonical workflow locks with adapter pinning, bounded timeout/retry policy, security/syntax gate records, and SHA-256 digests.
 - Dependency-aware concurrent executor with partial failure, cancellation, raw artifact retention, and execution manifests.
 - SQLite findings/evidence store and content-addressed artifact files.
-- Native JSON, SARIF 2.1.0, and self-contained HTML reporting.
+- Native JSON, SARIF 2.1.0, and self-contained HTML reporting: dark dashboard with per-tool cards, global and per-column filters, paginated findings (25/50/100/ALL), CSV export, a deterministic deduplicated remediation plan (package@version → fix versions with tallied advisories and NVD/GitHub/OSV/Opengrep-registry links), per-line copyable agent fix prompts, and a copy-all button that falls back to grep-against-the-file instructions when the prompt set is too large to paste.
 - CPU/memory/disk inspection and conservative, explicitly unvalidated model recommendations.
 - A Go inference interface and loopback-only `llama.cpp` HTTP provider. Managed runtime/model downloads are not implemented yet.
 

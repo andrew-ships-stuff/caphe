@@ -1,7 +1,7 @@
 ---
 import { Copy, Check, SquareTerminal } from '@lucide/astro';
 const demos = [
-  { id: 'audit', label: 'Audit', command: 'caphe audit ./my-service', lines: ['workflow  caphe:default · full scanner stack', 'tasks     sast · sbom · dependencies · secrets · git-workflows', 'evidence  normalized · correlated · worst-first', 'llm       optional · loopback only · hypothesis text', 'bundle    caphe-audit.json · .sarif · .md · sha256 digest'] },
+  { id: 'audit', label: 'Audit', command: 'caphe audit ./my-service', lines: ['workflow  caphe:default · full scanner stack', 'tasks     sast · sbom · dependencies · secrets · git-workflows', 'evidence  normalized · correlated · worst-first', 'llm       optional · loopback only · hypothesis text', 'remediation deterministic dedup · per-line fix prompts · copy all', 'bundle    caphe-audit.json · .sarif · .md · .html · sha256 digest'] },
   { id: 'scan', label: 'Scan', command: 'caphe scan ./my-service', lines: ['workflow  baseline-appsec@1.0.0', 'plan      sha256:7a1d… locked', 'tasks     sast · sbom · dependencies · secrets', 'evidence  normalizing scanner observations', 'result    findings persisted with provenance'] },
   { id: 'compile', label: 'Compile', command: 'caphe compile caphe:default', lines: ['security  passed', 'syntax    passed', 'execution not_evaluated', 'accuracy  not_evaluated', 'output    workflow.lock.json'] },
   { id: 'analyze', label: 'Analyze', command: 'caphe ai analyze --finding sha256:… --model local --model-digest sha256:…', lines: ['provider  llama.cpp · loopback only', 'contract  infer-security-invariant/v1', 'output    schema-valid hypothesis', 'status    hypothesized · verification required'] },
