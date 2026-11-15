@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/andrew-ships-stuff/caphe/internal/compiler"
@@ -295,8 +296,34 @@ func newID(prefix string) (string, error) {
 	return prefix + hex.EncodeToString(b), nil
 }
 
+func openForRead(path string) (*os.File, error) {
+	var lastErr error
+	for attempt := 0; attempt < 50; attempt++ {
+		file, err := os.Open(path)
+		if err == nil {
+			return file, nil
+		}
+		lastErr = err
+		if !fileLocked(err) {
+			return nil, err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return nil, lastErr
+}
+
+// fileLocked reports whether err is a Windows sharing violation, which
+// antivirus/indexer scans raise transiently on freshly written job files.
+func fileLocked(err error) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	var errno syscall.Errno
+	return errors.As(err, &errno) && errno == 32
+}
+
 func readJSON(path string, out any) error {
-	file, err := os.Open(path)
+	file, err := openForRead(path)
 	if err != nil {
 		return err
 	}
