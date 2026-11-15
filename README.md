@@ -78,8 +78,8 @@ The included fixture is deliberately vulnerable and must not be deployed.
 
 ```bash
 go build -o caphe ./cmd/caphe
-./caphe workflows validate workflows/demo-local.yaml
-./caphe compile workflows/demo-local.yaml --output demo.lock.json
+./caphe workflows validate caphe:demo-local
+./caphe compile caphe:demo-local --output demo.lock.json
 ./caphe validate demo.lock.json
 ./caphe run demo.lock.json --target examples/vulnerable-go
 ./caphe findings list
@@ -88,7 +88,7 @@ go build -o caphe ./cmd/caphe
 ./caphe report --format html --output caphe-report.html
 ```
 
-`workflows/demo-local.yaml` uses real Opengrep and Syft executables. Its Opengrep rule is stored with the target, so the demo does not fetch a ruleset. The broader default workflow additionally uses Grype and treats unavailable Gitleaks/Opengrep tasks as optional.
+`caphe:demo-local` (bundled in the binary) uses real Opengrep and Syft executables. Its Opengrep rule is stored with the target, so the demo does not fetch a ruleset. The broader default workflow additionally uses Grype and treats unavailable Gitleaks/Opengrep tasks as optional.
 
 State defaults to the user config directory under `caphe/`. Use `--data-dir PATH` for isolated runs.
 

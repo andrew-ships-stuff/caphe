@@ -106,6 +106,25 @@ Refresh procedure (run periodically, e.g. quarterly, as its own commit titled "B
 - `internal/audit` composes the above into the bundle; `internal/githubreview` implements the untrusted-analysis → trusted-publish split; `internal/inference` holds the llama.cpp provider, subprocess launcher (ephemeral loopback port, so users' own llama.cpp on :8080 never conflicts), model cache, and all prompt/schema/validator sets.
 - Dogfooding CI: `caphe-pr.yml` (untrusted `caphe github analyze` with `ai-serve: true`, `contents: read` only) → `caphe-publish.yml` (trusted `workflow_run` publisher, only exists/runs on `main`; re-validates artifact identity before posting).
 
+## Keep docs and the GitHub Pages site in sync with core changes
+
+The site at `website/` (deployed by `.github/workflows/pages.yml` on merge to `main`) and the docs are part of the feature: **any change to user-visible core behavior updates them in the same PR**, not "later".
+
+- Triggers — if your diff touches any of these, you owe a docs/site update (or an explicit note why you don't):
+  - CLI commands, flags, defaults, or the hero flow: `internal/cli/`
+  - Scanner adapters, supported tools, and managed installs: `internal/adapters/`, `scripts/install-tools.sh`
+  - Bundled workflows: `internal/workflow/bundled/` (site demo references `caphe:default`/`caphe:demo-local` by name)
+  - Report/bundle output formats and artifact names: `internal/audit/`, `internal/reporting/`, `internal/githubreview/`
+  - AI/LLM surfaces, prompts, budgets, pinned dogfood model: `internal/inference/`, `caphe-pr.yml`
+- Where to update:
+  - Commands shown to users: `website/src/components/TerminalDemo.astro` — every command it displays must be a valid invocation at this revision (the tabs are the #1 drift source)
+  - Feature/architecture claims and scanner lists: `website/src/pages/index.astro`, `website/src/components/ArchitectureDiagram.astro`
+  - Roadmap and benchmark claims: `website/src/pages/roadmap.astro`, `website/src/pages/benchmarks.astro`; shipped-vs-planned boundary: `docs/roadmap.md`
+  - Human onboarding: `README.md` and `Makefile` targets (e.g., `make demo` must keep working)
+- Honesty rules (mirrors [website/AGENTS.md](website/AGENTS.md)): never advertise unimplemented behavior; AI output stays labeled hypothesis/unverified; versions/model/scanner names match `internal/cli/root.go` (`Version`) and the pin table above.
+- Verify before committing: from `website/`, `npm ci && npm run build` (runs `astro check`) and `npm run test:links`; for Go-side docs, `make demo` style commands in README/Makefile must actually run.
+- If a docs/site file is dirty with another agent's uncommitted edits, do not clobber it: land the code change, then report the exact stale file and required edit in your final message so the drift is tracked instead of silently shipped.
+
 ## Commit and PR conventions
 
 - Subject: imperative, ≤ 72 chars, starts with Add/Fix/Bump/Refactor (e.g., "Fix empty findings report breaking GitHub PR analysis"); body as short `- ` bullets.

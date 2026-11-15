@@ -34,4 +34,4 @@ vet:
 check: test vet build
 
 demo: build
-	./bin/caphe scan examples/vulnerable-go --workflow workflows/demo-local.yaml
+	./bin/caphe scan examples/vulnerable-go --workflow caphe:demo-local
