@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestFindManagedInstallerFromRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasSuffix(path, "scripts/install-tools.sh") {
+	if !strings.HasSuffix(filepath.ToSlash(path), "scripts/install-tools.sh") {
 		t.Fatalf("unexpected installer: %s", path)
 	}
 }
