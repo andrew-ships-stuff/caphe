@@ -1,0 +1,132 @@
+name: Caphe security review
+description: Compile and run Caphe security workflows, compare PR baselines, and emit validated review artifacts
+author: Andrew
+inputs:
+  caphe-version:
+    description: Pinned Caphe release tag, or source to build the CLI from the pinned Action revision
+    required: false
+    default: source
+  caphe-binary:
+    description: Existing trusted Caphe binary path; overrides caphe-version
+    required: false
+    default: ''
+  workflow:
+    description: Workflow YAML path, or caphe:git-security for the bundled workflow
+    required: false
+    default: caphe:git-security
+  base-sha:
+    description: Full pull-request base commit SHA
+    required: true
+  head-sha:
+    description: Full pull-request head commit SHA
+    required: true
+  repository:
+    description: GitHub owner/repository
+    required: true
+  pull-request:
+    description: Pull-request number
+    required: true
+  severity-threshold:
+    description: Minimum severity for policy enforcement and inline candidates
+    required: false
+    default: high
+  fail-on-new:
+    description: Fail after producing artifacts when an introduced finding meets the threshold
+    required: false
+    default: 'true'
+  max-comments:
+    description: Maximum inline comment candidates
+    required: false
+    default: '10'
+  ai:
+    description: Enable local CPU inference via llama.cpp
+    required: false
+    default: 'false'
+  ai-model:
+    description: Explicit local model identifier
+    required: false
+    default: ''
+  ai-model-digest:
+    description: Verified local model content digest
+    required: false
+    default: ''
+  ai-endpoint:
+    description: Loopback-only llama.cpp endpoint (used when ai-serve is false)
+    required: false
+    default: http://127.0.0.1:8080
+  ai-serve:
+    description: Launch a private llama-server subprocess on an ephemeral loopback port (installs the managed llama.cpp tool and downloads the model)
+    required: false
+    default: 'false'
+  ai-model-url:
+    description: HTTPS model URL downloaded and sha256-verified into the model cache when ai-serve is true
+    required: false
+    default: ''
+  ai-llama-server:
+    description: Explicit llama-server binary; defaults to CAPHE_LLAMA_SERVER, then the managed tool, then PATH
+    required: false
+    default: ''
+  ai-threads:
+    description: llama-server CPU threads (0 selects the llama.cpp default)
+    required: false
+    default: '0'
+  max-model-calls:
+    description: Maximum model calls for this PR
+    required: false
+    default: '3'
+  max-input-tokens:
+    description: Maximum input tokens per call
+    required: false
+    default: '2048'
+  max-output-tokens:
+    description: Maximum output tokens per call
+    required: false
+    default: '256'
+  max-inference-time:
+    description: Maximum total inference time as a Go duration
+    required: false
+    default: 5m
+outputs:
+  review-artifact:
+    description: Path to the validated Caphe PR review JSON
+    value: ${{ steps.run.outputs.review-artifact }}
+  sarif:
+    description: Path to SARIF containing introduced findings
+    value: ${{ steps.run.outputs.sarif }}
+  summary:
+    description: Path to the Markdown job summary
+    value: ${{ steps.run.outputs.summary }}
+  policy-status:
+    description: pass or fail
+    value: ${{ steps.run.outputs.policy-status }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      name: Run Caphe pull-request analysis
+      shell: bash
+      env:
+        CAPHE_ACTION_PATH: ${{ github.action_path }}
+        CAPHE_VERSION: ${{ inputs.caphe-version }}
+        CAPHE_BINARY: ${{ inputs.caphe-binary }}
+        CAPHE_WORKFLOW: ${{ inputs.workflow }}
+        CAPHE_BASE_SHA: ${{ inputs.base-sha }}
+        CAPHE_HEAD_SHA: ${{ inputs.head-sha }}
+        CAPHE_REPOSITORY: ${{ inputs.repository }}
+        CAPHE_PR: ${{ inputs.pull-request }}
+        CAPHE_SEVERITY: ${{ inputs.severity-threshold }}
+        CAPHE_FAIL_ON_NEW: ${{ inputs.fail-on-new }}
+        CAPHE_MAX_COMMENTS: ${{ inputs.max-comments }}
+        CAPHE_AI: ${{ inputs.ai }}
+        CAPHE_AI_MODEL: ${{ inputs.ai-model }}
+        CAPHE_AI_MODEL_DIGEST: ${{ inputs.ai-model-digest }}
+        CAPHE_AI_ENDPOINT: ${{ inputs.ai-endpoint }}
+        CAPHE_AI_SERVE: ${{ inputs.ai-serve }}
+        CAPHE_AI_MODEL_URL: ${{ inputs.ai-model-url }}
+        CAPHE_AI_LLAMA_SERVER: ${{ inputs.ai-llama-server }}
+        CAPHE_AI_THREADS: ${{ inputs.ai-threads }}
+        CAPHE_MAX_MODEL_CALLS: ${{ inputs.max-model-calls }}
+        CAPHE_MAX_INPUT_TOKENS: ${{ inputs.max-input-tokens }}
+        CAPHE_MAX_OUTPUT_TOKENS: ${{ inputs.max-output-tokens }}
+        CAPHE_MAX_INFERENCE_TIME: ${{ inputs.max-inference-time }}
+      run: bash "$CAPHE_ACTION_PATH/scripts/github-action.sh"
