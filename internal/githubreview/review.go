@@ -33,27 +33,27 @@ type ChangedFile struct {
 }
 
 type Recommendation struct {
-	FindingID   string   `json:"findingId"`
-	EvidenceIDs []string `json:"evidenceIds"`
-	Explanation string   `json:"explanation"`
-	Remediation string   `json:"remediation"`
-	Source      string   `json:"source"`
-	Status      string   `json:"status"`
-	ModelDigest string   `json:"modelDigest,omitempty"`
-	PromptVersion string `json:"promptVersion,omitempty"`
-	SchemaVersion string `json:"schemaVersion,omitempty"`
+	FindingID     string   `json:"findingId"`
+	EvidenceIDs   []string `json:"evidenceIds"`
+	Explanation   string   `json:"explanation"`
+	Remediation   string   `json:"remediation"`
+	Source        string   `json:"source"`
+	Status        string   `json:"status"`
+	ModelDigest   string   `json:"modelDigest,omitempty"`
+	PromptVersion string   `json:"promptVersion,omitempty"`
+	SchemaVersion string   `json:"schemaVersion,omitempty"`
 }
 
 type AIInfo struct {
-	Enabled          bool          `json:"enabled"`
-	Model            string        `json:"model,omitempty"`
-	ModelDigest      string        `json:"modelDigest,omitempty"`
-	MaxCalls         int           `json:"maxCalls,omitempty"`
-	MaxInputTokens   int           `json:"maxInputTokens,omitempty"`
-	MaxOutputTokens  int           `json:"maxOutputTokens,omitempty"`
-	MaxTotalTime     time.Duration `json:"maxTotalTime,omitempty"`
-	Calls            int           `json:"calls"`
-	Errors           []string      `json:"errors,omitempty"`
+	Enabled         bool          `json:"enabled"`
+	Model           string        `json:"model,omitempty"`
+	ModelDigest     string        `json:"modelDigest,omitempty"`
+	MaxCalls        int           `json:"maxCalls,omitempty"`
+	MaxInputTokens  int           `json:"maxInputTokens,omitempty"`
+	MaxOutputTokens int           `json:"maxOutputTokens,omitempty"`
+	MaxTotalTime    time.Duration `json:"maxTotalTime,omitempty"`
+	Calls           int           `json:"calls"`
+	Errors          []string      `json:"errors,omitempty"`
 }
 
 type Comment struct {
@@ -202,7 +202,9 @@ func Analyze(base, head []findings.Finding, changed []ChangedFile, options Optio
 	if options.MaxComments < 0 || options.MaxComments > 100 {
 		return Artifact{}, fmt.Errorf("max comments must be between 0 and 100")
 	}
-	if _, ok := severityRank[options.SeverityThreshold]; !ok { return Artifact{}, fmt.Errorf("invalid severity threshold") }
+	if _, ok := severityRank[options.SeverityThreshold]; !ok {
+		return Artifact{}, fmt.Errorf("invalid severity threshold")
+	}
 	introduced, resolved, existing := classify(base, head)
 	a := Artifact{SchemaVersion: SchemaVersion, Repository: options.Repository, PullRequest: options.PullRequest, BaseSHA: options.BaseSHA, HeadSHA: options.HeadSHA, GeneratedAt: time.Now().UTC(), ChangedFiles: changed, Introduced: introduced, Resolved: resolved, Existing: existing}
 	for _, finding := range introduced {
@@ -284,12 +286,15 @@ func lineIsChanged(files []ChangedFile, path string, line int) bool {
 				return true
 			}
 		}
+	}
 	return false
 }
 
 var severityRank = map[findings.Severity]int{findings.SeverityUnknown: 0, findings.SeverityInfo: 1, findings.SeverityLow: 2, findings.SeverityMedium: 3, findings.SeverityHigh: 4, findings.SeverityCritical: 5}
 
-func meetsThreshold(actual, threshold findings.Severity) bool { return severityRank[actual] >= severityRank[threshold] }
+func meetsThreshold(actual, threshold findings.Severity) bool {
+	return severityRank[actual] >= severityRank[threshold]
+}
 func anyAtThreshold(items []findings.Finding, threshold findings.Severity) bool {
 	for _, item := range items {
 		if meetsThreshold(item.Severity, threshold) {
@@ -315,21 +320,27 @@ func renderSummary(a Artifact) string {
 }
 
 func shortSHA(s string) string {
-	if len(s) > 12 { return s[:12] }
+	if len(s) > 12 {
+		return s[:12]
+	}
 	return s
 }
 
 func digest(a Artifact) (string, error) {
 	a.Digest = ""
 	b, err := json.Marshal(a)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	sum := sha256.Sum256(b)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func setDigest(a *Artifact) error {
 	d, err := digest(*a)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	a.Digest = d
 	return nil
 }
@@ -347,17 +358,29 @@ func Validate(a Artifact, maxComments int) error {
 	}
 	introduced := map[string]bool{}
 	for _, f := range a.Introduced {
-		if f.ID == "" || f.ID != f.Fingerprint { return fmt.Errorf("invalid introduced finding identity") }
+		if f.ID == "" || f.ID != f.Fingerprint {
+			return fmt.Errorf("invalid introduced finding identity")
+		}
 		introduced[f.ID] = true
 	}
 	for _, rec := range a.Recommendations {
-		if !introduced[rec.FindingID] || len(rec.EvidenceIDs) == 0 || (rec.Source != "deterministic" && rec.Source != "ai") { return fmt.Errorf("invalid recommendation reference") }
-		for _, id := range rec.EvidenceIDs { if !introduced[id] { return fmt.Errorf("fabricated evidence reference %q", id) } }
-		if rec.Source == "ai" && (rec.Status != "hypothesis" || rec.ModelDigest == "" || rec.PromptVersion == "" || rec.SchemaVersion == "") { return fmt.Errorf("AI recommendation must remain a versioned hypothesis") }
+		if !introduced[rec.FindingID] || len(rec.EvidenceIDs) == 0 || (rec.Source != "deterministic" && rec.Source != "ai") {
+			return fmt.Errorf("invalid recommendation reference")
+		}
+		for _, id := range rec.EvidenceIDs {
+			if !introduced[id] {
+				return fmt.Errorf("fabricated evidence reference %q", id)
+			}
+		}
+		if rec.Source == "ai" && (rec.Status != "hypothesis" || rec.ModelDigest == "" || rec.PromptVersion == "" || rec.SchemaVersion == "") {
+			return fmt.Errorf("AI recommendation must remain a versioned hypothesis")
+		}
 	}
 	seenComments := map[string]bool{}
 	for _, c := range a.Comments {
-		if !introduced[c.FindingID] || seenComments[c.FindingID] || c.Side != "RIGHT" || c.Line <= 0 || len(c.Body) > 65536 || !lineIsChanged(a.ChangedFiles, c.Path, c.Line) { return fmt.Errorf("invalid inline comment") }
+		if !introduced[c.FindingID] || seenComments[c.FindingID] || c.Side != "RIGHT" || c.Line <= 0 || len(c.Body) > 65536 || !lineIsChanged(a.ChangedFiles, c.Path, c.Line) {
+			return fmt.Errorf("invalid inline comment")
+		}
 		seenComments[c.FindingID] = true
 	}
 	if a.Metrics.Introduced != len(a.Introduced) || a.Metrics.Resolved != len(a.Resolved) || a.Metrics.Existing != len(a.Existing) || a.Metrics.Inline != len(a.Comments) {
@@ -367,18 +390,28 @@ func Validate(a Artifact, maxComments int) error {
 }
 
 func constantStringEqual(a, b string) bool {
-	if len(a) != len(b) { return false }
+	if len(a) != len(b) {
+		return false
+	}
 	return bytes.Equal([]byte(a), []byte(b))
 }
 
 func LoadArtifact(path string, maxComments int) (Artifact, error) {
 	b, err := os.ReadFile(path)
-	if err != nil { return Artifact{}, err }
-	if len(b) > MaxArtifactBytes { return Artifact{}, fmt.Errorf("artifact exceeds %d bytes", MaxArtifactBytes) }
+	if err != nil {
+		return Artifact{}, err
+	}
+	if len(b) > MaxArtifactBytes {
+		return Artifact{}, fmt.Errorf("artifact exceeds %d bytes", MaxArtifactBytes)
+	}
 	var a Artifact
 	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&a); err != nil { return Artifact{}, fmt.Errorf("parse review artifact: %w", err) }
-	if err := Validate(a, maxComments); err != nil { return Artifact{}, err }
+	if err := decoder.Decode(&a); err != nil {
+		return Artifact{}, fmt.Errorf("parse review artifact: %w", err)
+	}
+	if err := Validate(a, maxComments); err != nil {
+		return Artifact{}, err
+	}
 	return a, nil
 }

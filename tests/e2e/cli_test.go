@@ -127,6 +127,49 @@ func TestInitRejectsConfigurationDirectorySymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestGitHubPRAnalyzeValidateAnnotateAndDryRunPublish(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("git fixture currently targets POSIX runners")
+	}
+	repo := repositoryRoot(t)
+	temp := t.TempDir()
+	binary := filepath.Join(temp, "caphe")
+	run(t, repo, nil, "go", "build", "-o", binary, "./cmd/caphe")
+	fixture := filepath.Join(temp, "fixture")
+	if err := os.MkdirAll(fixture, 0o700); err != nil { t.Fatal(err) }
+	run(t, fixture, nil, "git", "init", "--quiet")
+	run(t, fixture, nil, "git", "config", "user.email", "e2e@caphe.dev")
+	run(t, fixture, nil, "git", "config", "user.name", "Caphe E2E")
+	if err := os.WriteFile(filepath.Join(fixture, "main.go"), []byte("package main\n"), 0o600); err != nil { t.Fatal(err) }
+	run(t, fixture, nil, "git", "add", "main.go")
+	run(t, fixture, nil, "git", "commit", "--quiet", "-m", "base")
+	baseSHA := strings.TrimSpace(run(t, fixture, nil, "git", "rev-parse", "HEAD"))
+	if err := os.WriteFile(filepath.Join(fixture, "main.go"), []byte("package main\n// changed security-sensitive line\n"), 0o600); err != nil { t.Fatal(err) }
+	run(t, fixture, nil, "git", "add", "main.go")
+	run(t, fixture, nil, "git", "commit", "--quiet", "-m", "head")
+	headSHA := strings.TrimSpace(run(t, fixture, nil, "git", "rev-parse", "HEAD"))
+	baseReport := filepath.Join(temp, "base.json")
+	headReport := filepath.Join(temp, "head.json")
+	if err := os.WriteFile(baseReport, []byte(`{"schemaVersion":"caphe.dev/report/v1alpha1","findings":[]}`), 0o600); err != nil { t.Fatal(err) }
+	findingID := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	head := map[string]any{"schemaVersion": "caphe.dev/report/v1alpha1", "findings": []any{map[string]any{"id": findingID, "fingerprint": findingID, "tool": "scanner.opengrep", "ruleId": "e2e.security", "title": "Introduced E2E finding", "severity": "high", "location": map[string]any{"path": "main.go", "startLine": 2}, "artifactDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
+	headData, err := json.Marshal(head); if err != nil { t.Fatal(err) }
+	if err := os.WriteFile(headReport, headData, 0o600); err != nil { t.Fatal(err) }
+	artifact := filepath.Join(temp, "review.json")
+	summary := filepath.Join(temp, "summary.md")
+	sarif := filepath.Join(temp, "review.sarif")
+	run(t, fixture, nil, binary, "github", "analyze", "--base-report", baseReport, "--head-report", headReport, "--base-sha", baseSHA, "--head-sha", headSHA, "--repository", "owner/repository", "--pr", "7", "--output", artifact, "--summary-output", summary, "--sarif-output", sarif, "--max-comments", "2", "--json")
+	run(t, fixture, nil, binary, "github", "validate", artifact, "--repository", "owner/repository", "--pr", "7", "--base-sha", baseSHA, "--head-sha", headSHA, "--max-comments", "2", "--json")
+	annotation := run(t, fixture, nil, binary, "github", "annotations", artifact, "--max-comments", "2")
+	if !strings.Contains(annotation, "::error") || !strings.Contains(annotation, findingID) { t.Fatalf("unexpected annotation: %s", annotation) }
+	published := run(t, fixture, nil, binary, "github", "publish", artifact, "--repository", "owner/repository", "--pr", "7", "--base-sha", baseSHA, "--head-sha", headSHA, "--max-comments", "2", "--dry-run", "--json")
+	if !strings.Contains(published, `"dryRun": true`) { t.Fatalf("unexpected dry-run result: %s", published) }
+	data, err := os.ReadFile(artifact); if err != nil { t.Fatal(err) }
+	data = strings.ReplaceAll(string(data), "Introduced E2E finding", "tampered finding")
+	if err := os.WriteFile(artifact, []byte(data), 0o600); err != nil { t.Fatal(err) }
+	runFailure(t, fixture, nil, binary, "github", "validate", artifact, "--repository", "owner/repository", "--pr", "7", "--base-sha", baseSHA, "--head-sha", headSHA, "--max-comments", "2")
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)

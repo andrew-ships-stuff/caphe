@@ -24,11 +24,23 @@ func ValidateReviewRecommendation(raw []byte, findingID string, allowedEvidence 
 	var recommendation ReviewRecommendation
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&recommendation); err != nil { return recommendation, fmt.Errorf("review schema: %w", err) }
+	if err := decoder.Decode(&recommendation); err != nil {
+		return recommendation, fmt.Errorf("review schema: %w", err)
+	}
 	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF { return recommendation, fmt.Errorf("review schema: trailing JSON content") }
-	if recommendation.FindingID != findingID || recommendation.Confidence != "hypothesis" { return recommendation, fmt.Errorf("review response has invalid finding identity or confidence") }
-	if len(recommendation.EvidenceIDs) == 0 || len(recommendation.EvidenceIDs) > 8 || strings.TrimSpace(recommendation.Explanation) == "" || len(recommendation.Explanation) > 1000 || strings.TrimSpace(recommendation.Remediation) == "" || len(recommendation.Remediation) > 1000 { return recommendation, fmt.Errorf("review response exceeds schema bounds") }
-	for _, id := range recommendation.EvidenceIDs { if !allowedEvidence[id] { return recommendation, fmt.Errorf("fabricated evidence identifier %q", id) } }
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return recommendation, fmt.Errorf("review schema: trailing JSON content")
+	}
+	if recommendation.FindingID != findingID || recommendation.Confidence != "hypothesis" {
+		return recommendation, fmt.Errorf("review response has invalid finding identity or confidence")
+	}
+	if len(recommendation.EvidenceIDs) == 0 || len(recommendation.EvidenceIDs) > 8 || strings.TrimSpace(recommendation.Explanation) == "" || len(recommendation.Explanation) > 1000 || strings.TrimSpace(recommendation.Remediation) == "" || len(recommendation.Remediation) > 1000 {
+		return recommendation, fmt.Errorf("review response exceeds schema bounds")
+	}
+	for _, id := range recommendation.EvidenceIDs {
+		if !allowedEvidence[id] {
+			return recommendation, fmt.Errorf("fabricated evidence identifier %q", id)
+		}
+	}
 	return recommendation, nil
 }
