@@ -60,6 +60,9 @@ spec: {target: {type: repository}, tasks: [{id: scan, uses: scanner.fixed}]}
 	if m.Status != "succeeded" || m.FindingCount != 1 || m.Tasks[0].ArtifactDigest == "" {
 		t.Fatalf("unexpected manifest: %#v", m)
 	}
+	if m.Tasks[0].Uses != "scanner.fixed" {
+		t.Fatalf("task uses = %q, want scanner.fixed", m.Tasks[0].Uses)
+	}
 	got, err := db.ListFindings(t.Context())
 	if err != nil || len(got) != 1 {
 		t.Fatalf("findings=%#v err=%v", got, err)

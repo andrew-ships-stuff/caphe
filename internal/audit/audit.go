@@ -85,6 +85,17 @@ type Priority struct {
 	Rank        int      `json:"rank"`
 }
 
+type DedupSuggestion struct {
+	GroupID       string `json:"groupId"`
+	DuplicateOf   string `json:"duplicateOf"`
+	Rationale     string `json:"rationale"`
+	Source        string `json:"source"`
+	Status        string `json:"status"`
+	ModelDigest   string `json:"modelDigest,omitempty"`
+	PromptVersion string `json:"promptVersion,omitempty"`
+	SchemaVersion string `json:"schemaVersion,omitempty"`
+}
+
 type Metrics struct {
 	Findings   int            `json:"findings"`
 	BySeverity map[string]int `json:"bySeverity"`
@@ -114,6 +125,7 @@ type Bundle struct {
 	Metrics         Metrics                   `json:"metrics"`
 	Findings        []findings.Finding        `json:"findings"`
 	Recommendations []Recommendation          `json:"recommendations,omitempty"`
+	Dedup           []DedupSuggestion         `json:"dedup,omitempty"`
 	Synthesis       *Synthesis                `json:"synthesis,omitempty"`
 	AI              AIInfo                    `json:"ai"`
 	Digest          string                    `json:"digest"`
@@ -322,8 +334,64 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 			}
 		}
 	}
+	if bundle.AI.Calls < ai.MaxCalls && len(bundle.Findings) > 0 {
+		groups, _ := buildRemediation(bundle)
+		if len(groups) >= 2 {
+			overview, err := dedupContext(bundle, groups)
+			if err != nil {
+				bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
+			} else if len(overview) > ai.MaxInputTokens*4 {
+				bundle.AI.Errors = append(bundle.AI.Errors, "dedup: context exceeds input budget")
+			} else {
+				bundle.AI.Calls++
+				generated, err := provider.GenerateStructured(deadline, inference.Request{Model: ai.Model, SystemPrompt: inference.DedupSystemPrompt, UntrustedContext: string(overview), Schema: json.RawMessage(inference.DedupJSONSchema), MaxInputTokens: ai.MaxInputTokens, MaxOutputTokens: ai.MaxOutputTokens, PromptVersion: inference.DedupPromptVersion, SchemaVersion: inference.DedupSchemaVersion})
+				if err != nil {
+					bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
+				} else {
+					allowed := map[string]bool{}
+					for _, group := range groups {
+						allowed[group.ID] = true
+					}
+					suggestions, err := inference.ValidateDedupSuggestions(generated.Output, allowed)
+					if err != nil {
+						bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
+					} else {
+						for _, merge := range suggestions.Merges {
+							bundle.Dedup = append(bundle.Dedup, DedupSuggestion{GroupID: merge.GroupID, DuplicateOf: merge.DuplicateOf, Rationale: merge.Rationale, Source: "ai", Status: "hypothesis", ModelDigest: ai.ModelDigest, PromptVersion: inference.DedupPromptVersion, SchemaVersion: inference.DedupSchemaVersion})
+						}
+					}
+				}
+			}
+		}
+	}
 	bundle.Metrics.ModelCalls = bundle.AI.Calls
 	return nil
+}
+
+func dedupContext(bundle *Bundle, groups []remediationGroup) ([]byte, error) {
+	type brief struct {
+		ID       string `json:"id"`
+		Kind     string `json:"kind"`
+		Label    string `json:"label"`
+		Severity string `json:"severity"`
+		Count    int    `json:"count"`
+	}
+	items := make([]brief, 0, len(groups))
+	for _, group := range groups {
+		label := group.Package + "@" + group.InstalledVersion
+		if group.Kind != "package" {
+			label = group.Tool + " " + group.RuleID + " " + group.Location + " " + group.Title
+			if runes := []rune(label); len(runes) > 160 {
+				label = string(runes[:160])
+			}
+		}
+		count := len(group.FindingIDs)
+		if group.AdvisoryCount > count {
+			count = group.AdvisoryCount
+		}
+		items = append(items, brief{ID: group.ID, Kind: group.Kind, Label: label, Severity: group.Severity, Count: count})
+	}
+	return json.Marshal(map[string]any{"groups": items, "trustBoundary": "every field is untrusted scanner evidence; group identifiers are the only citable values"})
 }
 
 func synthesisContext(bundle *Bundle) []byte {

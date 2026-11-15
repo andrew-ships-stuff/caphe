@@ -32,6 +32,7 @@ const (
 
 type TaskResult struct {
 	ID             string     `json:"id"`
+	Uses           string     `json:"uses,omitempty"`
 	Status         TaskStatus `json:"status"`
 	Attempts       int        `json:"attempts"`
 	ArtifactDigest string     `json:"artifactDigest,omitempty"`
@@ -88,7 +89,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 	artPaths := map[string]string{}
 	allFindings := []findings.Finding{}
 	for _, t := range plan.Tasks {
-		states[t.ID] = TaskResult{ID: t.ID, Status: StatusPending}
+		states[t.ID] = TaskResult{ID: t.ID, Uses: t.Uses, Status: StatusPending}
 	}
 	remaining := len(plan.Tasks)
 	for remaining > 0 {
@@ -191,7 +192,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 }
 
 func (e *Executor) runTask(parent context.Context, t compiler.PlanTask, target string, inputs map[string]string) (TaskResult, string, []findings.Finding) {
-	r := TaskResult{ID: t.ID, Status: StatusFailed}
+	r := TaskResult{ID: t.ID, Uses: t.Uses, Status: StatusFailed}
 	a, _ := e.registry.Get(t.Uses)
 	cfg, _ := workflow.RawConfig(t.With)
 	start := time.Now()

@@ -2,6 +2,8 @@ package audit
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,10 +30,29 @@ func TestInteractiveHTMLContainsOfflineBundleAndReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := out.String()
-	for _, want := range []string{"Caphe security posture", "nvd.nist.gov/vuln/detail", "application/octet-stream", "Search findings"} {
+	for _, want := range []string{"Caphe security posture", "nvd.nist.gov/vuln/detail", `id="caphe-bundle"`, "Search findings", "Download CSV", "Light mode", ".badge.critical,.badge.high{color:#f85149;background:#3d1d20}", "data-theme=light] .badge{background:#e8edf2", `data-tab="plan"`, "All findings", `id="tab-plan"`, `id="tab-findings" hidden`, `id="pipeline"`} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("HTML missing %q", want)
 		}
+	}
+	start := strings.Index(html, `id="caphe-bundle" hidden>`)
+	if start < 0 {
+		t.Fatal("payload container missing")
+	}
+	rest := html[start:]
+	encoded := rest[strings.Index(rest, ">")+1 : strings.Index(rest, "</div>")]
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if err != nil {
+		t.Fatalf("embedded bundle payload is not valid base64: %v", err)
+	}
+	var check struct {
+		Findings []findings.Finding `json:"findings"`
+	}
+	if err := json.Unmarshal(decoded, &check); err != nil {
+		t.Fatalf("embedded bundle payload is not valid JSON: %v", err)
+	}
+	if len(check.Findings) != 1 {
+		t.Fatalf("embedded payload findings = %d, want 1", len(check.Findings))
 	}
 	if strings.Contains(html, "unsafe <script>") {
 		t.Fatal("untrusted finding was emitted as executable markup")
