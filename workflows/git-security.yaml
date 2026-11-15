@@ -1,0 +1,20 @@
+apiVersion: caphe.dev/v1alpha1
+kind: SecurityWorkflow
+metadata:
+  name: git-workflow-security
+  version: "1.0.0"
+spec:
+  target: {type: repository}
+  policies:
+    network: restricted
+    executeGeneratedCode: false
+    allowActiveTesting: false
+  tasks:
+    - id: git-workflows
+      uses: scanner.poutine
+    - id: normalize
+      uses: core.normalize
+      needs: [git-workflows]
+    - id: correlate
+      uses: core.correlate
+      needs: [normalize]

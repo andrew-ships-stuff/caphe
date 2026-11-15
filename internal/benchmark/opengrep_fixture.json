@@ -1,0 +1,1 @@
+{"results":[{"check_id":"caphe.demo.command-injection","path":"main.go","start":{"line":12},"extra":{"message":"User-controlled shell execution","severity":"ERROR"}}]}

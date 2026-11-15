@@ -1,0 +1,141 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TerminalDemo from '../components/TerminalDemo.astro';
+import ArchitectureDiagram from '../components/ArchitectureDiagram.astro';
+import { ArrowRight, GitFork, Cpu, Workflow, ShieldCheck, Laptop, ScanSearch, PackageSearch, Boxes, KeyRound, CircleCheck, CircleDashed, LockKeyhole, Gauge, Braces } from '@lucide/astro';
+const base = import.meta.env.BASE_URL;
+const href = (path: string) => `${base}${path.replace(/^\//, '')}`;
+const principles = [
+  { icon: Cpu, title: 'CPU-native', text: 'The deterministic engine needs no GPU, paid inference API, or specialized hardware. Optional inference remains local.' },
+  { icon: Workflow, title: 'Deterministic by design', text: 'Compile validated YAML into a content-addressed lock, then execute a fixed dependency graph.' },
+  { icon: ShieldCheck, title: 'Evidence over assumptions', text: 'Preserve raw scanner output, normalize provenance, and keep hypotheses separate from confirmed observations.' },
+  { icon: Laptop, title: 'Portable foundations', text: 'Build targets cover macOS, Linux, and Windows. Docker is available; distributed Kubernetes workers are planned.' }
+];
+const integrations = [
+  { icon: ScanSearch, name: 'Opengrep', category: 'SAST', status: 'available', text: 'JSON scan output with source locations and complete result preservation.' },
+  { icon: Boxes, name: 'Syft', category: 'SBOM', status: 'available', text: 'CycloneDX JSON or Syft JSON with raw SBOM retention.' },
+  { icon: PackageSearch, name: 'Grype', category: 'SCA', status: 'available', text: 'Dependency findings normalized from a supplied SBOM artifact.' },
+  { icon: KeyRound, name: 'Gitleaks', category: 'Secrets', status: 'available', text: 'Redacted JSON mode with secret material excluded from normalized properties.' }
+];
+---
+<BaseLayout title="Caphe — CPU-Native Compiled Security Workflows" description="Caphe is an open-source Go security framework combining deterministic scanners, compiled workflows, evidence-aware analysis, and optional CPU-only AI inference.">
+  <section class="hero">
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <a class="eyebrow" href={href('/roadmap/')}><span>v0.1 development snapshot</span><ArrowRight size={14}/></a>
+        <h1>Security intelligence.<br/><em>Compiled for any CPU.</em></h1>
+        <p>Caphe combines deterministic security tooling, evidence-aware analysis, and optional local language models into portable, reproducible security workflows.</p>
+        <div class="cta-row">
+          <a class="button primary" href={href('/docs/getting-started/')}>Get Started <ArrowRight size={17}/></a>
+          <a class="button secondary" href="https://github.com/andrew-ships-stuff/caphe"><GitFork size={17}/> View on GitHub</a>
+        </div>
+        <div class="hero-proof" aria-label="Core properties"><span><CircleCheck/>Fixed execution DAG</span><span><CircleCheck/>Raw evidence retained</span><span><CircleCheck/>AI stays optional</span></div>
+      </div>
+      <TerminalDemo />
+    </div>
+  </section>
+
+  <section class="principles section">
+    <div class="section-heading"><span>01 / Principles</span><h2>A security runtime with a hard boundary around probability.</h2><p>Scanners observe. The compiler constrains. Models may propose. Verification decides.</p></div>
+    <div class="principle-grid">
+      {principles.map(({ icon: Icon, title, text }, index) => <article><div><Icon/><span>0{index + 1}</span></div><h3>{title}</h3><p>{text}</p></article>)}
+    </div>
+  </section>
+
+  <section class="architecture-section section">
+    <div class="section-heading centered"><span>02 / System</span><h2>One evidence trail, end to end.</h2><p>The current implementation compiles and runs local workflows. Optional inference is bounded; richer verification and distributed workers remain roadmap work.</p></div>
+    <ArchitectureDiagram />
+  </section>
+
+  <section class="compiled section">
+    <div class="compiled-copy">
+      <span class="kicker">03 / Compiled AI</span>
+      <h2>Intelligence informs the plan. It does not drive the loop.</h2>
+      <p>Caphe follows the separation at the heart of compiled AI: probabilistic generation or semantic extraction cannot repeatedly choose runtime actions. Workflow YAML is validated against a static adapter registry and compiled into a canonical, tamper-evident data plan.</p>
+      <p>At runtime, the executor schedules only declared dependencies. Optional llama.cpp calls are predeclared, schema-bounded semantic tasks. Their output is stored as a hypothesis—never promoted directly to a confirmed vulnerability.</p>
+      <a class="text-link" href={href('/docs/architecture/')}>Read the architecture <ArrowRight size={16}/></a>
+    </div>
+    <div class="contract" aria-label="Runtime contract example">
+      <header><Braces size={16}/> runtime.contract.json <span>bounded</span></header>
+      <pre><code><b>{`{`}</b>
+  <i>"control_flow"</i>: <strong>"fixed_dag"</strong>,
+  <i>"model_role"</i>: <strong>"hypothesis_only"</strong>,
+  <i>"confidence"</i>: <strong>"hypothesis"</strong>,
+  <i>"verification"</i>: <strong>"independent"</strong>,
+  <i>"fallback"</i>: <strong>"deterministic"</strong>
+<b>{`}`}</b></code></pre>
+      <footer><LockKeyhole size={15}/> Model output cannot construct commands or add tasks.</footer>
+    </div>
+  </section>
+
+  <section class="integrations section">
+    <div class="section-heading"><span>04 / Adapters</span><h2>Bring mature scanners. Keep their evidence intact.</h2><p>Four typed adapters are implemented today. Planned adapters are documented separately and never presented as available.</p></div>
+    <div class="integration-grid">
+      {integrations.map(({ icon: Icon, name, category, text }) => <article><div class="integration-top"><Icon/><span>{category}</span><em><CircleCheck/>Available</em></div><h3>{name}</h3><p>{text}</p></article>)}
+      <article class="planned-card"><div class="integration-top"><CircleDashed/><span>Roadmap</span><em>Planned</em></div><h3>OPA · OSV · Checkov · Kubescape</h3><p>Adapter concepts are on the roadmap; no production implementation is claimed in this snapshot.</p></article>
+    </div>
+    <a class="text-link" href={href('/docs/integrations/')}>Explore integration status <ArrowRight size={16}/></a>
+  </section>
+
+  <section class="hardware section">
+    <div class="hardware-panel">
+      <div><span class="kicker">05 / Hardware independence</span><h2>Local-first. CPU-conscious. Useful with AI switched off.</h2><p>Hardware inspection and conservative model recommendations use available memory—not aspirational specs. Recommendations are explicitly unvalidated until measured against a model, context size, concurrency, and task.</p><a class="text-link" href={href('/docs/cpu-inference/')}>Understand CPU inference <ArrowRight size={16}/></a></div>
+      <div class="environments" aria-label="Deployment status">
+        <div><strong>macOS</strong><span class="available">Build target</span></div><div><strong>Linux</strong><span class="available">Build target</span></div><div><strong>Windows</strong><span class="available">Build target</span></div><div><strong>Docker</strong><span class="available">Dockerfile</span></div><div><strong>Kubernetes</strong><span class="planned">Planned</span></div><div><strong>GPU</strong><span class="neutral">Not required</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="benchmark-callout section">
+    <Gauge size={34}/><div><span>Benchmarks without theater</span><h2>The harness is real. Broad performance claims are not—yet.</h2><p>Caphe currently measures reproducible fixture normalization. Accuracy, inference, and correlation baselines remain explicitly marked <code>not_run</code>.</p></div><a class="button secondary" href={href('/benchmarks/')}>View methodology</a>
+  </section>
+
+  <section class="final-cta section">
+    <span>Compile the control plane. Preserve the proof.</span>
+    <h2>Bring your scanners. Keep your CPU.<br/>Compile better security.</h2>
+    <div class="cta-row"><a class="button primary" href={href('/docs/getting-started/')}>Explore Documentation <ArrowRight size={17}/></a><a class="button secondary" href="https://github.com/andrew-ships-stuff/caphe">View Source <GitFork size={17}/></a></div>
+  </section>
+</BaseLayout>
+
+<style>
+  .section { width: min(1180px, calc(100% - 2rem)); margin: 0 auto; padding: clamp(5rem, 9vw, 8rem) 0; }
+  .hero { position: relative; overflow: hidden; min-height: 760px; border-bottom: 1px solid var(--caphe-border); }
+  .grid-bg { position: absolute; inset: 0; background-image: linear-gradient(var(--caphe-border) 1px, transparent 1px), linear-gradient(90deg, var(--caphe-border) 1px, transparent 1px); background-size: 48px 48px; opacity: .24; mask-image: linear-gradient(to bottom, #000 0%, transparent 85%); }
+  .hero::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 22% 35%, color-mix(in srgb, var(--caphe-accent), transparent 88%), transparent 28%), radial-gradient(circle at 82% 42%, color-mix(in srgb, var(--caphe-teal), transparent 91%), transparent 24%); pointer-events: none; }
+  .hero-inner { position: relative; z-index: 1; display: grid; grid-template-columns: 1.02fr .98fr; align-items: center; gap: clamp(2rem, 5vw, 5rem); width: min(1180px, calc(100% - 2rem)); min-height: 700px; margin: 0 auto; padding: 5rem 0; }
+  .eyebrow { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid var(--caphe-border); border-radius: 999px; background: color-mix(in srgb, var(--caphe-surface), transparent 12%); color: var(--caphe-muted); padding: .4rem .65rem; text-decoration: none; font: 650 .7rem ui-monospace, monospace; }
+  .eyebrow span { color: var(--caphe-accent); }
+  h1 { max-width: 680px; margin: 1.5rem 0; color: var(--caphe-text); font-size: clamp(3rem, 6.3vw, 5.7rem); line-height: .96; letter-spacing: -.065em; }
+  h1 em { color: var(--caphe-accent); font-style: normal; }
+  .hero-copy > p { max-width: 650px; color: var(--caphe-muted); font-size: clamp(1.02rem, 1.7vw, 1.22rem); line-height: 1.7; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: .55rem; min-height: 3rem; border: 1px solid var(--caphe-border); border-radius: .7rem; padding: .72rem 1rem; text-decoration: none; font-size: .86rem; font-weight: 750; }
+  .button.primary { border-color: var(--caphe-accent); background: var(--caphe-accent); color: var(--caphe-accent-ink); }
+  .button.primary:hover { background: #e4b77f; }
+  .button.secondary { background: var(--caphe-surface); color: var(--caphe-text); }
+  .button.secondary:hover { border-color: var(--caphe-accent); }
+  .hero-proof { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 2rem; color: var(--caphe-muted); font-size: .72rem; }
+  .hero-proof span { display: flex; align-items: center; gap: .35rem; }.hero-proof :global(svg) { width: .9rem; color: var(--caphe-teal); }
+  .section-heading { max-width: 760px; margin-bottom: 3rem; }.section-heading.centered { margin-right: auto; margin-left: auto; text-align: center; }
+  .section-heading > span, .kicker, .final-cta > span { color: var(--caphe-accent); font: 700 .72rem ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
+  .section-heading h2, .compiled h2, .hardware h2, .final-cta h2 { margin: .8rem 0; color: var(--caphe-text); font-size: clamp(2rem, 4vw, 3.7rem); line-height: 1.06; letter-spacing: -.045em; }
+  .section-heading p, .compiled p, .hardware p { color: var(--caphe-muted); line-height: 1.75; }
+  .principle-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--caphe-border); border-left: 1px solid var(--caphe-border); }
+  .principle-grid article { min-height: 17rem; border-right: 1px solid var(--caphe-border); border-bottom: 1px solid var(--caphe-border); padding: 1.5rem; }
+  .principle-grid article > div { display: flex; align-items: center; justify-content: space-between; color: var(--caphe-accent); }.principle-grid article > div span { color: var(--caphe-muted); font: .7rem ui-monospace, monospace; }
+  .principle-grid h3 { margin-top: 4rem; color: var(--caphe-text); font-size: 1.1rem; }.principle-grid p, .integration-grid p { color: var(--caphe-muted); font-size: .86rem; line-height: 1.65; }
+  .architecture-section { width: 100%; max-width: none; background: var(--caphe-surface); padding-right: 1rem; padding-left: 1rem; }.architecture-section .section-heading { max-width: 760px; }
+  .compiled { display: grid; grid-template-columns: 1fr .9fr; align-items: center; gap: clamp(3rem, 9vw, 8rem); }
+  .compiled-copy p { max-width: 650px; }.text-link { display: inline-flex; align-items: center; gap: .4rem; margin-top: 1rem; color: var(--caphe-accent); text-decoration: none; font-weight: 750; }
+  .contract { overflow: hidden; border: 1px solid var(--caphe-border); border-radius: 1rem; background: #0a0e11; box-shadow: 0 24px 80px #0004; }
+  .contract header, .contract footer { display: flex; align-items: center; gap: .5rem; color: #9ea9ae; padding: .9rem 1.1rem; font: .7rem ui-monospace, monospace; }.contract header { border-bottom: 1px solid #263139; }.contract header span { margin-left: auto; color: #76c7b7; }.contract footer { border-top: 1px solid #263139; }
+  .contract pre { overflow-x: auto; margin: 0; padding: 2rem 1.2rem; color: #d4d9d6; font-size: clamp(.7rem, 1.6vw, .85rem); line-height: 2; }.contract i { color: #d6a56b; font-style: normal; }.contract strong { color: #76c7b7; font-weight: 500; }.contract b { color: #9ea9ae; }
+  .integrations { border-top: 1px solid var(--caphe-border); }.integration-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; }
+  .integration-grid article { border: 1px solid var(--caphe-border); border-radius: .9rem; background: var(--caphe-surface); padding: 1.3rem; }.integration-grid h3 { margin: 2rem 0 .5rem; color: var(--caphe-text); }.integration-top { display: flex; align-items: center; gap: .5rem; color: var(--caphe-accent); }.integration-top > span { color: var(--caphe-muted); font: .65rem ui-monospace, monospace; }.integration-top em { display: flex; align-items: center; gap: .25rem; margin-left: auto; color: var(--caphe-teal); font: 600 .62rem ui-monospace, monospace; font-style: normal; }.integration-top em :global(svg) { width: .8rem; }.planned-card { border-style: dashed !important; }.planned-card em { color: var(--caphe-muted); }
+  .hardware { width: 100%; max-width: none; background: var(--caphe-surface); }.hardware-panel { display: grid; grid-template-columns: 1.2fr .8fr; gap: 4rem; width: min(1120px, calc(100% - 2rem)); margin: 0 auto; }.environments { display: grid; align-content: center; grid-template-columns: 1fr 1fr; }.environments div { display: grid; gap: .3rem; border: 1px solid var(--caphe-border); padding: 1rem; }.environments strong { color: var(--caphe-text); font-size: .86rem; }.environments span { font: .65rem ui-monospace, monospace; }.environments .available { color: var(--caphe-teal); }.environments .planned, .environments .neutral { color: var(--caphe-muted); }
+  .benchmark-callout { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1.5rem; }.benchmark-callout > :global(svg) { color: var(--caphe-accent); }.benchmark-callout span { color: var(--caphe-accent); font: .7rem ui-monospace, monospace; }.benchmark-callout h2 { margin: .3rem 0; color: var(--caphe-text); font-size: clamp(1.3rem, 2.5vw, 2rem); }.benchmark-callout p { margin: 0; color: var(--caphe-muted); }.benchmark-callout code { color: var(--caphe-teal); }
+  .final-cta { width: 100%; max-width: none; border-top: 1px solid var(--caphe-border); background: linear-gradient(135deg, color-mix(in srgb, var(--caphe-accent), transparent 93%), transparent 50%); text-align: center; }.final-cta h2 { max-width: 900px; margin: 1rem auto; }.final-cta .cta-row { justify-content: center; }
+  @media (max-width: 980px) { .hero-inner { grid-template-columns: 1fr; }.hero-copy { text-align: center; }.hero-copy > p, .hero-copy h1 { margin-right: auto; margin-left: auto; }.hero-copy .cta-row, .hero-proof { justify-content: center; }.principle-grid { grid-template-columns: 1fr 1fr; }.compiled, .hardware-panel { grid-template-columns: 1fr; }.integration-grid { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 620px) { .section { width: min(100% - 1.25rem, 1180px); }.hero-inner { width: calc(100% - 1.25rem); padding-top: 3rem; }.principle-grid, .integration-grid, .environments { grid-template-columns: 1fr; }.principle-grid article { min-height: 13rem; }.principle-grid h3 { margin-top: 2rem; }.benchmark-callout { grid-template-columns: 1fr; }.benchmark-callout .button { width: 100%; }.final-cta { width: 100%; }.hero-proof { display: none; } }
+</style>

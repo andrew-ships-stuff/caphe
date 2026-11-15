@@ -1,0 +1,43 @@
+apiVersion: caphe.dev/v1alpha1
+kind: SecurityWorkflow
+metadata:
+  name: baseline-appsec
+  version: "1.0.0"
+spec:
+  target:
+    type: repository
+  policies:
+    network: restricted
+    executeGeneratedCode: false
+    allowActiveTesting: false
+  defaults:
+    timeoutSeconds: 300
+    retries: 0
+  tasks:
+    - id: sast
+      uses: scanner.opengrep
+      optional: true
+      with:
+        ruleset: p/security-audit
+    - id: sbom
+      uses: scanner.syft
+      with:
+        outputFormat: cyclonedx-json
+    - id: dependencies
+      uses: scanner.grype
+      needs: [sbom]
+      with:
+        input: "${tasks.sbom.outputs.sbom}"
+    - id: secrets
+      uses: scanner.gitleaks
+      optional: true
+    - id: git-workflows
+      uses: scanner.poutine
+      optional: true
+    - id: normalize
+      uses: core.normalize
+      needs: [sast, dependencies, secrets, git-workflows]
+      optionalNeeds: [sast, secrets, git-workflows]
+    - id: correlate
+      uses: core.correlate
+      needs: [normalize]

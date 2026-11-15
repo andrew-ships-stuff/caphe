@@ -1,0 +1,7 @@
+rules:
+  - id: caphe.demo.command-injection
+    message: User-controlled shell execution can allow command injection.
+    severity: ERROR
+    languages: [go]
+    patterns:
+      - pattern: exec.Command("sh", "-c", $CMD)

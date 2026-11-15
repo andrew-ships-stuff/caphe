@@ -1,0 +1,29 @@
+{
+  "name": "caphe-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "prebuild": "node scripts/render-og.mjs",
+    "build": "astro check && astro build",
+    "check": "astro check",
+    "preview": "astro preview",
+    "test:links": "node scripts/check-links.mjs",
+    "test:a11y": "node scripts/a11y.mjs"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "latest",
+    "@astrojs/starlight": "latest",
+    "@lucide/astro": "^1.73.0",
+    "@tailwindcss/vite": "latest",
+    "astro": "latest",
+    "sharp": "latest",
+    "tailwindcss": "latest"
+  },
+  "devDependencies": {
+    "@astrojs/check": "latest",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "latest",
+    "typescript": "latest"
+  }
+}

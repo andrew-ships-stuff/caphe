@@ -1,0 +1,10 @@
+/bin/
+/caphe
+/*.lock.json
+/caphe-report.*
+/.caphe/
+.DS_Store
+/website/node_modules/
+/website/dist/
+/website/.astro/
+paper.txt

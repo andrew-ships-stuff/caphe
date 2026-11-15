@@ -1,0 +1,66 @@
+name: deploy website to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://andrew-ships-stuff.github.io' }}
+      BASE_PATH: ${{ vars.BASE_PATH || '/caphe' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+        working-directory: website
+      - name: Build and type-check
+        run: npm run build
+        working-directory: website
+      - name: Validate internal links
+        run: npm run test:links
+        working-directory: website
+      - name: Install browser for accessibility checks
+        run: npx playwright install --with-deps chromium
+        working-directory: website
+      - name: Run accessibility checks
+        run: npm run test:a11y
+        working-directory: website
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

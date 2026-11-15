@@ -1,0 +1,67 @@
+---
+import { GitFork, Moon, Sun, Menu, BookOpen } from '@lucide/astro';
+const base = import.meta.env.BASE_URL;
+const href = (path: string) => `${base}${path.replace(/^\//, '')}`;
+---
+<header class="nav-shell">
+  <nav class="nav" aria-label="Primary navigation">
+    <a class="brand" href={href('/')} aria-label="Caphe home">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="5" y="5" width="38" height="38" rx="12"/><path d="M16 15h16M16 24h10M16 33h16"/><circle cx="33" cy="24" r="4"/></svg>
+      <span>caphe</span><span class="status">dev</span>
+    </a>
+    <div class="desktop-links">
+      <a href={href('/docs/getting-started/')}>Docs</a>
+      <a href={href('/docs/integrations/')}>Integrations</a>
+      <a href={href('/benchmarks/')}>Benchmarks</a>
+      <a href={href('/roadmap/')}>Roadmap</a>
+    </div>
+    <div class="actions">
+      <button class="icon-button theme-toggle" aria-label="Switch color theme" title="Switch color theme"><Sun class="sun" size={18}/><Moon class="moon" size={18}/></button>
+      <a class="icon-button" href="https://github.com/andrew-ships-stuff/caphe" aria-label="Caphe on GitHub"><GitFork size={19}/></a>
+      <details class="mobile-menu">
+        <summary aria-label="Open navigation"><Menu size={20}/></summary>
+        <div>
+          <a href={href('/docs/getting-started/')}><BookOpen size={17}/> Documentation</a>
+          <a href={href('/docs/integrations/')}>Integrations</a>
+          <a href={href('/benchmarks/')}>Benchmarks</a>
+          <a href={href('/roadmap/')}>Roadmap</a>
+          <a href={href('/contributing/')}>Contributing</a>
+        </div>
+      </details>
+    </div>
+  </nav>
+</header>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>('.theme-toggle');
+  button?.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('caphe-theme', next);
+  });
+</script>
+
+<style>
+  .nav-shell { position: sticky; z-index: 50; top: 0; border-bottom: 1px solid color-mix(in srgb, var(--caphe-border), transparent 20%); background: color-mix(in srgb, var(--caphe-bg), transparent 8%); backdrop-filter: blur(14px); }
+  .nav { display: flex; align-items: center; justify-content: space-between; width: min(1180px, calc(100% - 2rem)); height: 4.5rem; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: .65rem; color: var(--caphe-text); text-decoration: none; font: 750 1.1rem/1 ui-monospace, monospace; letter-spacing: -.03em; }
+  .brand svg { width: 2rem; height: 2rem; }
+  .brand rect { fill: var(--caphe-surface); stroke: var(--caphe-accent); stroke-width: 2; }
+  .brand path { fill: none; stroke: var(--caphe-text); stroke-width: 3; stroke-linecap: round; }
+  .brand circle { fill: var(--caphe-teal); }
+  .status { border: 1px solid var(--caphe-border); border-radius: 999px; color: var(--caphe-muted); padding: .25rem .45rem; font: 650 .65rem/1 ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }
+  .desktop-links { display: flex; gap: 1.6rem; }
+  .desktop-links a { color: var(--caphe-muted); text-decoration: none; font-size: .9rem; font-weight: 650; }
+  .desktop-links a:hover { color: var(--caphe-text); }
+  .actions { display: flex; align-items: center; gap: .4rem; }
+  .icon-button, summary { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border: 1px solid var(--caphe-border); border-radius: .65rem; background: var(--caphe-surface); color: var(--caphe-muted); cursor: pointer; }
+  .icon-button:hover, summary:hover { color: var(--caphe-text); border-color: var(--caphe-accent); }
+  :global([data-theme='light']) .sun, :global([data-theme='dark']) .moon { display: none; }
+  .mobile-menu { display: none; position: relative; }
+  summary { list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  .mobile-menu > div { position: absolute; top: 3rem; right: 0; display: grid; width: 15rem; overflow: hidden; border: 1px solid var(--caphe-border); border-radius: .75rem; background: var(--caphe-surface); box-shadow: 0 18px 60px #0006; }
+  .mobile-menu a { display: flex; align-items: center; gap: .55rem; color: var(--caphe-text); padding: .9rem 1rem; text-decoration: none; border-bottom: 1px solid var(--caphe-border); }
+  .mobile-menu a:last-child { border: 0; }
+  @media (max-width: 760px) { .desktop-links { display: none; } .mobile-menu { display: block; } }
+</style>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs><pattern id="g" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#263139" stroke-width="1"/></pattern><radialGradient id="r"><stop stop-color="#D6A56B" stop-opacity=".18"/><stop offset="1" stop-color="#0C1014" stop-opacity="0"/></radialGradient></defs>
+  <rect width="1200" height="630" fill="#0C1014"/><rect width="1200" height="630" fill="url(#g)" opacity=".55"/><circle cx="330" cy="300" r="440" fill="url(#r)"/>
+  <g transform="translate(82 86)"><rect width="72" height="72" rx="21" fill="#151B20" stroke="#D6A56B" stroke-width="3"/><path d="M21 22h31M21 36h18M21 50h31" stroke="#F2F0EA" stroke-width="5" stroke-linecap="round"/><circle cx="52" cy="36" r="7" fill="#76C7B7"/></g>
+  <text x="174" y="136" fill="#F2F0EA" font-family="ui-monospace,monospace" font-weight="700" font-size="34">caphe</text>
+  <text x="82" y="292" fill="#F2F0EA" font-family="Inter,system-ui,sans-serif" font-weight="750" font-size="76" letter-spacing="-4">Security intelligence.</text>
+  <text x="82" y="382" fill="#D6A56B" font-family="Inter,system-ui,sans-serif" font-weight="750" font-size="76" letter-spacing="-4">Compiled for any CPU.</text>
+  <text x="84" y="470" fill="#9EA9AE" font-family="Inter,system-ui,sans-serif" font-size="28">Deterministic workflows · Evidence provenance · Optional local inference</text>
+  <g transform="translate(84 530)"><circle cx="8" cy="8" r="8" fill="#76C7B7"/><text x="28" y="16" fill="#F2F0EA" font-family="ui-monospace,monospace" font-size="23">github.com/andrew-ships-stuff/caphe</text></g>
+</svg>

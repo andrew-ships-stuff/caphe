@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+:root {
+  --caphe-bg: #0c1014;
+  --caphe-surface: #151b20;
+  --caphe-surface-2: #1b2329;
+  --caphe-text: #f2f0ea;
+  --caphe-muted: #9ea9ae;
+  --caphe-accent: #d6a56b;
+  --caphe-accent-ink: #18130e;
+  --caphe-teal: #76c7b7;
+  --caphe-border: #263139;
+  --sl-color-accent-low: #34291d;
+  --sl-color-accent: #d6a56b;
+  --sl-color-accent-high: #f7dfbd;
+  --sl-color-bg: #0c1014;
+  --sl-color-bg-nav: #0c1014e8;
+  --sl-color-bg-sidebar: #0c1014;
+  --sl-color-bg-inline-code: #1b2329;
+  --sl-color-hairline: #263139;
+  --sl-color-text: #f2f0ea;
+  --sl-color-text-accent: #e7ba84;
+  --sl-font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sl-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+:root[data-theme='light'] {
+  --caphe-bg: #f7f4ee;
+  --caphe-surface: #fffdf9;
+  --caphe-surface-2: #ede7dd;
+  --caphe-text: #182026;
+  --caphe-muted: #5c686d;
+  --caphe-accent: #7b4c1c;
+  --caphe-accent-ink: #fffdf9;
+  --caphe-teal: #176c61;
+  --caphe-border: #d8d1c5;
+  --sl-color-accent-low: #f2dec3;
+  --sl-color-accent: #8a5720;
+  --sl-color-accent-high: #3e260d;
+  --sl-color-bg: #f7f4ee;
+  --sl-color-bg-nav: #f7f4eee8;
+  --sl-color-bg-sidebar: #f7f4ee;
+  --sl-color-bg-inline-code: #ede7dd;
+  --sl-color-hairline: #d8d1c5;
+  --sl-color-text: #182026;
+  --sl-color-text-accent: #7b4c1c;
+}
+
+html { scroll-behavior: smooth; }
+body { background: var(--caphe-bg); color: var(--caphe-text); }
+::selection { background: #d6a56b55; color: var(--caphe-text); }
+:focus-visible { outline: 3px solid var(--caphe-teal); outline-offset: 3px; }
+.sl-markdown-content a:not([class]) { text-decoration: underline; text-underline-offset: .2em; }
+.sl-markdown-content table { display: table; width: 100%; }
+.sl-markdown-content code { border: 1px solid var(--caphe-border); }
+.sl-markdown-content pre code { border: 0; }
+.site-title img { width: 2rem; height: 2rem; }
+
+@media (max-width: 50rem) {
+  .sl-markdown-content table { display: block; overflow-x: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
