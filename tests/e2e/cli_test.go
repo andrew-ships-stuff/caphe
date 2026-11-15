@@ -209,6 +209,104 @@ func TestGitHubPRAnalyzeValidateAnnotateAndDryRunPublish(t *testing.T) {
 	runFailure(t, fixture, nil, binary, "github", "validate", artifact, "--repository", "owner/repository", "--pr", "7", "--base-sha", baseSHA, "--head-sha", headSHA, "--max-comments", "2")
 }
 
+func TestAuditHeroCommandAggregatesAndDegrades(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("mock executable fixtures currently use POSIX scripts")
+	}
+	repo := repositoryRoot(t)
+	temp := t.TempDir()
+	binary := filepath.Join(temp, "caphe")
+	run(t, repo, nil, "go", "build", "-o", binary, "./cmd/caphe")
+	target := filepath.Join(temp, "target")
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	toolDir := filepath.Join(temp, "tools")
+	if err := os.MkdirAll(toolDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mocks := map[string]string{
+		"opengrep": `#!/bin/sh
+printf '%s\n' '{"results":[{"check_id":"e2e.injection","path":"main.go","start":{"line":2},"extra":{"message":"Command injection","severity":"ERROR"}},{"check_id":"e2e.hardcoded","path":"config.go","start":{"line":7},"extra":{"message":"Hardcoded credential","severity":"WARNING"}}]}'
+`,
+		"syft": `#!/bin/sh
+printf '%s\n' '{"components":[{"name":"lib-a","version":"1.0"},{"name":"lib-b","version":"2.0"}]}'
+`,
+		"grype": `#!/bin/sh
+printf '%s\n' '{"matches":[{"vulnerability":{"id":"CVE-2024-0001","severity":"High"},"artifact":{"name":"lib-a","version":"1.0"}}]}'
+`,
+		"gitleaks": `#!/bin/sh
+printf '%s\n' '[{"RuleID":"generic-api-key","Description":"Generic API key","File":"config.go","StartLine":7,"Secret":"x","Match":"y","Entropy":4.2}]'
+`,
+		"poutine": `#!/bin/sh
+printf '%s\n' '{"runs":[{"results":[{"ruleId":"untrusted-checkout-exec","level":"error","message":{"text":"Untrusted checkout executes code"},"locations":[{"physicalLocation":{"artifactLocation":{"uri":".github/workflows/ci.yml"},"region":{"startLine":19}}}]}]}]}'
+`,
+	}
+	for name, script := range mocks {
+		writeExecutable(t, filepath.Join(toolDir, name), script)
+	}
+	bundlePath := filepath.Join(temp, "bundle.json")
+	sarifPath := filepath.Join(temp, "bundle.sarif")
+	markdownPath := filepath.Join(temp, "bundle.md")
+	env := append(os.Environ(), "PATH="+toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	out := run(t, temp, env, binary, "audit", target, "-o", bundlePath, "--sarif-output", sarifPath, "--markdown-output", markdownPath, "--data-dir", filepath.Join(temp, "state"), "--json")
+	if !strings.Contains(out, `"findings": 5`) || !strings.Contains(out, "sha256:") {
+		t.Fatalf("audit summary missing aggregate metrics: %s", out)
+	}
+	data, err := os.ReadFile(bundlePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle struct {
+		SchemaVersion string `json:"schemaVersion"`
+		Findings      []struct {
+			Tool     string `json:"tool"`
+			Severity string `json:"severity"`
+		} `json:"findings"`
+		Recommendations []struct {
+			Source string `json:"source"`
+		} `json:"recommendations"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	if bundle.SchemaVersion != "caphe.dev/audit/bundle/v1alpha1" || bundle.Status != "succeeded" || len(bundle.Findings) != 5 || len(bundle.Recommendations) != 5 {
+		t.Fatalf("unexpected bundle: %s", data)
+	}
+	tools := map[string]bool{}
+	for _, item := range bundle.Findings {
+		tools[item.Tool] = true
+	}
+	for _, want := range []string{"scanner.opengrep", "scanner.gitleaks", "scanner.grype", "scanner.poutine"} {
+		if !tools[want] {
+			t.Fatalf("bundle missing findings from %s: %s", want, data)
+		}
+	}
+	if bundle.Findings[0].Severity != "high" {
+		t.Fatalf("bundle must sort worst findings first: %s", data)
+	}
+	sarif, err := os.ReadFile(sarifPath)
+	if err != nil || !strings.Contains(string(sarif), "untrusted-checkout-exec") {
+		t.Fatalf("sarif missing findings: %v", err)
+	}
+	markdown, err := os.ReadFile(markdownPath)
+	if err != nil || !strings.Contains(string(markdown), "Caphe security audit") {
+		t.Fatalf("markdown report missing: %v", err)
+	}
+	degraded := run(t, temp, []string{"PATH=/usr/bin:/bin"}, binary, "audit", target, "-o", filepath.Join(temp, "degraded.json"), "--sarif-output", "", "--markdown-output", "", "--data-dir", filepath.Join(temp, "degraded-state"), "--json")
+	if !strings.Contains(degraded, `"status": "succeeded"`) || !strings.Contains(degraded, `"findings": 0`) {
+		t.Fatalf("audit must succeed with all scanners missing: %s", degraded)
+	}
+	missingModel := runFailure(t, temp, env, binary, "audit", target, "-o", filepath.Join(temp, "ai.json"), "--data-dir", filepath.Join(temp, "ai-state"), "--ai")
+	if !strings.Contains(missingModel, "--ai-model and --ai-model-digest are required") {
+		t.Fatalf("expected AI flag validation, got: %s", missingModel)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)

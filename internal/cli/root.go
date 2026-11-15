@@ -51,7 +51,7 @@ func (a *app) root() *cobra.Command {
 	defaultDir, _ := os.UserConfigDir()
 	c.PersistentFlags().StringVar(&a.dataDir, "data-dir", filepath.Join(defaultDir, "caphe"), "state and artifact directory")
 	c.PersistentFlags().BoolVar(&a.jsonOutput, "json", false, "emit machine-readable JSON")
-	c.AddCommand(a.version(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
+	c.AddCommand(a.version(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
 	return c
 }
 func (a *app) print(v any) error {
@@ -157,9 +157,18 @@ func (a *app) toolsCmd() *cobra.Command {
 func (a *app) workflowsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "workflows", Short: "Inspect workflow definitions"}
 	c.AddCommand(&cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error {
+		items := map[string]any{}
+		if names, err := workflow.BundledNames(); err == nil {
+			for _, name := range names {
+				items["caphe:"+name] = "bundled"
+			}
+		}
 		matches, _ := filepath.Glob("workflows/*.yaml")
 		sort.Strings(matches)
-		return a.print(matches)
+		for _, match := range matches {
+			items[match] = "file"
+		}
+		return a.print(items)
 	}}, &cobra.Command{Use: "validate WORKFLOW", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		w, err := workflow.Load(args[0])
 		if err != nil {
@@ -254,7 +263,7 @@ func (a *app) scanCmd() *cobra.Command {
 	var concurrency int
 	c := &cobra.Command{Use: "scan TARGET", Args: cobra.ExactArgs(1), Short: "Compile and run the default or selected workflow", RunE: func(cmd *cobra.Command, args []string) error {
 		if wf == "" {
-			wf = "workflows/default.yaml"
+			wf = "caphe:default"
 		}
 		w, err := workflow.Load(wf)
 		if err != nil {
@@ -266,7 +275,7 @@ func (a *app) scanCmd() *cobra.Command {
 		}
 		return a.execute(cmd.Context(), p, args[0], concurrency)
 	}}
-	c.Flags().StringVar(&wf, "workflow", "", "workflow YAML (default workflows/default.yaml)")
+	c.Flags().StringVar(&wf, "workflow", "", "workflow YAML or caphe:<bundled-name> (default caphe:default)")
 	c.Flags().IntVar(&concurrency, "concurrency", runtime.NumCPU(), "maximum concurrent tasks")
 	return c
 }

@@ -21,11 +21,13 @@ spec:
         ruleset: p/security-audit
     - id: sbom
       uses: scanner.syft
+      optional: true
       with:
         outputFormat: cyclonedx-json
     - id: dependencies
       uses: scanner.grype
       needs: [sbom]
+      optional: true
       with:
         input: "${tasks.sbom.outputs.sbom}"
     - id: secrets
@@ -37,7 +39,7 @@ spec:
     - id: normalize
       uses: core.normalize
       needs: [sast, dependencies, secrets, git-workflows]
-      optionalNeeds: [sast, secrets, git-workflows]
+      optionalNeeds: [sast, dependencies, secrets, git-workflows]
     - id: correlate
       uses: core.correlate
       needs: [normalize]

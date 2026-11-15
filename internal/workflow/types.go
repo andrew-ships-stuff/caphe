@@ -70,6 +70,9 @@ func Parse(data []byte) (*Workflow, error) {
 }
 
 func Load(path string) (*Workflow, error) {
+	if IsBundled(path) {
+		return LoadBundled(path)
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read workflow: %w", err)

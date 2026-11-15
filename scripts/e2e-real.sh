@@ -11,7 +11,7 @@ mkdir -p "$state_dir"
 trap 'rm -f "$lock_file"' EXIT INT TERM
 
 "$binary" tools doctor --json
-"$binary" compile workflows/git-security.yaml --output "$lock_file" --json
+"$binary" compile caphe:git-security --output "$lock_file" --json
 "$binary" validate "$lock_file" --json
 "$binary" run "$lock_file" --target . --data-dir "$state_dir" --json
 "$binary" report --format sarif --output "$report_file" --data-dir "$state_dir"

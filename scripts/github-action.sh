@@ -33,8 +33,7 @@ export PATH="$tool_bin:$PATH"
 export CAPHE_TOOL_BIN="$tool_bin"
 
 workflow="$CAPHE_WORKFLOW"
-if [[ "$workflow" == caphe:git-security ]]; then workflow="$CAPHE_ACTION_PATH/workflows/git-security.yaml"; fi
-[[ -f "$workflow" ]] || { echo "workflow not found: $workflow" >&2; exit 2; }
+[[ -f "$workflow" || "$workflow" == caphe:* ]] || { echo "workflow not found: $workflow" >&2; exit 2; }
 
 git -C "$GITHUB_WORKSPACE" worktree add --detach "$base_tree" "$CAPHE_BASE_SHA"
 base_state="$action_state/base-state"
