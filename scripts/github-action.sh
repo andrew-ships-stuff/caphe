@@ -17,7 +17,7 @@ if [[ -n "${CAPHE_BINARY:-}" ]]; then
   caphe_binary="$CAPHE_BINARY"
 elif [[ "${CAPHE_VERSION:-source}" == source ]]; then
   caphe_binary="$action_state/caphe"
-  go build -trimpath -o "$caphe_binary" "$CAPHE_ACTION_PATH/cmd/caphe"
+  go -C "$CAPHE_ACTION_PATH" build -trimpath -o "$caphe_binary" ./cmd/caphe
 else
   install_dir="$action_state/bin"
   CAPHE_VERSION="$CAPHE_VERSION" CAPHE_INSTALL_DIR="$install_dir" sh "$CAPHE_ACTION_PATH/scripts/install.sh"

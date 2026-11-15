@@ -18,6 +18,9 @@ type Native struct {
 }
 
 func JSON(w io.Writer, items []findings.Finding) error {
+	if items == nil {
+		items = []findings.Finding{}
+	}
 	return json.NewEncoder(w).Encode(Native{SchemaVersion: "caphe.dev/report/v1alpha1", GeneratedAt: time.Now().UTC(), Findings: items})
 }
 

@@ -119,10 +119,14 @@ func LoadReport(path string) ([]findings.Finding, error) {
 	if len(b) > MaxArtifactBytes {
 		return nil, fmt.Errorf("report exceeds %d bytes", MaxArtifactBytes)
 	}
-	var native struct {
-		Findings []findings.Finding `json:"findings"`
-	}
-	if err := json.Unmarshal(b, &native); err == nil && native.Findings != nil {
+	trimmed := bytes.TrimLeft(b, " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		var native struct {
+			Findings []findings.Finding `json:"findings"`
+		}
+		if err := json.Unmarshal(b, &native); err != nil {
+			return nil, fmt.Errorf("parse findings report: %w", err)
+		}
 		return native.Findings, nil
 	}
 	var direct []findings.Finding

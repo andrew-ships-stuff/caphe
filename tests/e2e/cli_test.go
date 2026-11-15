@@ -156,8 +156,11 @@ func TestGitHubPRAnalyzeValidateAnnotateAndDryRunPublish(t *testing.T) {
 	headSHA := strings.TrimSpace(run(t, fixture, nil, "git", "rev-parse", "HEAD"))
 	baseReport := filepath.Join(temp, "base.json")
 	headReport := filepath.Join(temp, "head.json")
-	if err := os.WriteFile(baseReport, []byte(`{"schemaVersion":"caphe.dev/report/v1alpha1","findings":[]}`), 0o600); err != nil {
+	run(t, fixture, nil, binary, "report", "--format", "json", "--output", baseReport, "--data-dir", filepath.Join(temp, "base-state"))
+	if data, err := os.ReadFile(baseReport); err != nil {
 		t.Fatal(err)
+	} else if !strings.Contains(string(data), `"findings":[]`) {
+		t.Fatalf("empty report must serialize findings as an empty array, got: %s", data)
 	}
 	findingID := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	head := map[string]any{"schemaVersion": "caphe.dev/report/v1alpha1", "findings": []any{map[string]any{"id": findingID, "fingerprint": findingID, "tool": "scanner.opengrep", "ruleId": "e2e.security", "title": "Introduced E2E finding", "severity": "high", "location": map[string]any{"path": "main.go", "startLine": 2}, "artifactDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}}
