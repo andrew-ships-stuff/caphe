@@ -40,7 +40,7 @@ jobs:
         run: bash scripts/e2e-real.sh ./bin/caphe
       - name: Upload SARIF
         if: ${{ always() && hashFiles('caphe-e2e.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
         with:
           sarif_file: caphe-e2e.sarif
           category: caphe-poutine
