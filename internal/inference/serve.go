@@ -90,7 +90,10 @@ func requireExecutable(p string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if info.IsDir() || info.Mode()&0o111 == 0 {
+	if info.IsDir() {
+		return "", fmt.Errorf("%s is not an executable file", abs)
+	}
+	if runtime.GOOS != "windows" && info.Mode()&0o111 == 0 {
 		return "", fmt.Errorf("%s is not an executable file", abs)
 	}
 	return abs, nil

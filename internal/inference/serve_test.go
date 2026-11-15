@@ -164,9 +164,10 @@ func TestSubprocessEnvStripsSecrets(t *testing.T) {
 			t.Fatalf("GITHUB_TOKEN leaked to subprocess: %s", entry)
 		}
 	}
-	want := "LD_LIBRARY_PATH=/opt/llama/bin"
+	binary := "/opt/llama/bin/llama-server"
+	want := "LD_LIBRARY_PATH=" + filepath.Dir(binary)
 	if runtime.GOOS == "darwin" {
-		want = "DYLD_LIBRARY_PATH=/opt/llama/bin"
+		want = "DYLD_LIBRARY_PATH=" + filepath.Dir(binary)
 	}
 	found := false
 	for _, entry := range env {
