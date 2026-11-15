@@ -52,7 +52,7 @@ func (a *app) root() *cobra.Command {
 	defaultDir, _ := os.UserConfigDir()
 	c.PersistentFlags().StringVar(&a.dataDir, "data-dir", filepath.Join(defaultDir, "caphe"), "state and artifact directory")
 	c.PersistentFlags().BoolVar(&a.jsonOutput, "json", false, "emit machine-readable JSON")
-	c.AddCommand(a.version(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
+	c.AddCommand(a.version(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.clusterCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
 	return c
 }
 func (a *app) print(v any) error {
@@ -61,19 +61,11 @@ func (a *app) print(v any) error {
 		e.SetIndent("", "  ")
 		return e.Encode(v)
 	}
-	switch x := v.(type) {
-	case string:
-		_, err := fmt.Fprintln(a.stdout, x)
-		return err
-	default:
-		e := json.NewEncoder(a.stdout)
-		e.SetIndent("", "  ")
-		return e.Encode(v)
-	}
+	return a.printHuman(v)
 }
 func (a *app) version() *cobra.Command {
 	return &cobra.Command{Use: "version", Short: "Print version information", RunE: func(cmd *cobra.Command, _ []string) error {
-		return a.print(map[string]any{"version": Version, "compilerVersion": compiler.Version, "go": runtime.Version(), "os": runtime.GOOS, "architecture": runtime.GOARCH})
+		return a.print(versionReport{Version: Version, CompilerVersion: compiler.Version, Go: runtime.Version(), OS: runtime.GOOS, Architecture: runtime.GOARCH})
 	}}
 }
 func (a *app) initState() (*storage.Store, error) {
@@ -106,7 +98,10 @@ func (a *app) initCmd() *cobra.Command {
 	return c
 }
 func (a *app) doctor() *cobra.Command {
-	return &cobra.Command{Use: "doctor", Short: "Inspect Caphe, hardware, storage, scanners, and inference", RunE: func(cmd *cobra.Command, _ []string) error {
+	var fix bool
+	command := &cobra.Command{Use: "doctor", Short: "Inspect Caphe, hardware, storage, scanners, and inference", RunE: func(cmd *cobra.Command, _ []string) error {
+		stop := a.startSpinner("Running diagnostics")
+		defer stop()
 		i, err := hardware.Inspect(cmd.Context(), a.dataDir)
 		if err != nil {
 			return err
@@ -117,10 +112,24 @@ func (a *app) doctor() *cobra.Command {
 			s.Close()
 		}
 		tools := a.detectTools(cmd.Context())
+		runtimePath, runtimeErr := inference.ResolveLlamaServer("")
+		if fix {
+			stop()
+			if err := a.applyDoctorFixes(cmd.Context(), tools, runtimeErr == nil); err != nil {
+				return err
+			}
+			stop = a.startSpinner("Verifying fixes")
+			tools = a.detectTools(cmd.Context())
+			runtimePath, runtimeErr = inference.ResolveLlamaServer("")
+		}
 		provider, _ := inference.NewLlamaCPP("http://127.0.0.1:8080", 2*time.Second)
 		ai, _ := provider.Available(cmd.Context())
-		return a.print(map[string]any{"healthy": storageOK, "storage": map[string]any{"path": a.dataDir, "available": storageOK}, "hardware": i, "tools": tools, "inference": map[string]any{"provider": "llama.cpp", "available": ai, "endpoint": "http://127.0.0.1:8080"}})
+		stop()
+		inferenceStatus := inferenceReport{Provider: "llama.cpp", Available: ai, Endpoint: "http://127.0.0.1:8080", RuntimeAvailable: runtimeErr == nil, RuntimePath: runtimePath, LaunchMode: "ephemeral-loopback-subprocess"}
+		return a.print(doctorReport{Healthy: storageOK, Storage: storageReport{Path: a.dataDir, Available: storageOK}, Hardware: i, Tools: tools, Inference: inferenceStatus, Suggestions: doctorSuggestions(tools, inferenceStatus)})
 	}}
+	command.Flags().BoolVar(&fix, "fix", false, "install missing checksum-pinned Caphe-managed scanners and llama.cpp from a source checkout")
+	return command
 }
 func (a *app) hardwareCmd() *cobra.Command {
 	c := &cobra.Command{Use: "hardware", Short: "Inspect CPU-only execution resources"}
@@ -149,10 +158,13 @@ func (a *app) detectTools(ctx context.Context) []adapters.ToolInfo {
 }
 func (a *app) toolsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "tools", Short: "Inspect registered scanner adapters"}
-	c.AddCommand(&cobra.Command{Use: "list", RunE: func(cmd *cobra.Command, _ []string) error { return a.print(a.detectTools(cmd.Context())) }}, &cobra.Command{Use: "doctor", RunE: func(cmd *cobra.Command, _ []string) error {
+	run := func(cmd *cobra.Command, _ []string) error {
+		stop := a.startSpinner("Detecting scanner tools")
 		items := a.detectTools(cmd.Context())
+		stop()
 		return a.print(items)
-	}})
+	}
+	c.AddCommand(&cobra.Command{Use: "list", RunE: run}, &cobra.Command{Use: "doctor", RunE: run})
 	return c
 }
 func (a *app) workflowsCmd() *cobra.Command {
@@ -255,7 +267,9 @@ func (a *app) execute(ctx context.Context, p *compiler.Plan, target string, conc
 	}
 	defer s.Close()
 	e := capheruntime.New(a.registry, artifacts.New(filepath.Join(a.dataDir, "artifacts")), s, concurrency)
+	stop := a.startSpinner("Executing workflow")
 	m, runErr := e.Run(ctx, p, target)
+	stop()
 	_ = a.print(m)
 	return runErr
 }
@@ -332,6 +346,9 @@ func (a *app) graphCmd() *cobra.Command {
 func (a *app) reportCmd() *cobra.Command {
 	var format, out string
 	c := &cobra.Command{Use: "report [AUDIT_BUNDLE]", Args: cobra.MaximumNArgs(1), Short: "Generate a report from persisted findings or an audit bundle", RunE: func(cmd *cobra.Command, args []string) error {
+		if a.jsonOutput && !cmd.Flags().Changed("format") {
+			format = "json"
+		}
 		w := a.stdout
 		var f *os.File
 		var err error
@@ -357,6 +374,8 @@ func (a *app) reportCmd() *cobra.Command {
 				return reporting.SARIF(w, bundle.Findings)
 			case "html":
 				return audit.RenderHTML(w, bundle)
+			case "table":
+				return renderFindings(w, bundle.Findings)
 			default:
 				return fmt.Errorf("unsupported format %q", format)
 			}
@@ -377,11 +396,13 @@ func (a *app) reportCmd() *cobra.Command {
 			return reporting.SARIF(w, items)
 		case "html":
 			return reporting.HTML(w, items)
+		case "table":
+			return renderFindings(w, items)
 		default:
 			return fmt.Errorf("unsupported format %q", format)
 		}
 	}}
-	c.Flags().StringVar(&format, "format", "json", "json, sarif, or html")
+	c.Flags().StringVar(&format, "format", "table", "table, json, sarif, or html")
 	c.Flags().StringVarP(&out, "output", "o", "-", "output file or -")
 	return c
 }
@@ -417,6 +438,8 @@ func (a *app) aiAnalyzeCmd() *cobra.Command {
 		if findingID == "" || model == "" || modelDigest == "" {
 			return fmt.Errorf("--finding, --model, and --model-digest are required")
 		}
+		stop := a.startSpinner("Analyzing finding")
+		defer stop()
 		s, err := a.initState()
 		if err != nil {
 			return err
@@ -444,6 +467,7 @@ func (a *app) aiAnalyzeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			stop()
 			return a.print(map[string]any{"hypothesisId": id, "cached": true, "invariant": inv})
 		}
 		provider, err := inference.NewLlamaCPP(endpoint, timeout)
@@ -472,6 +496,7 @@ func (a *app) aiAnalyzeCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
+		stop()
 		return a.print(map[string]any{"hypothesisId": id, "cached": false, "invariant": inv, "usage": map[string]any{"promptTokens": result.PromptTokens, "completionTokens": result.CompletionTokens, "duration": result.Duration.String()}})
 	}}
 	c.Flags().StringVar(&findingID, "finding", "", "persisted finding identifier")
@@ -486,7 +511,9 @@ func (a *app) benchmarkCmd() *cobra.Command {
 	c := &cobra.Command{Use: "benchmark", Short: "Run Caphe benchmark fixtures"}
 	var iterations int
 	run := &cobra.Command{Use: "run", Short: "Measure deterministic fixture normalization and report unavailable baselines", RunE: func(cmd *cobra.Command, _ []string) error {
+		stop := a.startSpinner("Running benchmark")
 		r, err := caphebenchmark.Run(iterations)
+		stop()
 		if err != nil {
 			return err
 		}

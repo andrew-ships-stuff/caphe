@@ -34,7 +34,8 @@ export default defineConfig({
           items: [
             { label: 'Getting started', slug: 'docs/getting-started' },
             { label: 'Architecture', slug: 'docs/architecture' },
-            { label: 'CLI reference', slug: 'docs/cli' }
+            { label: 'CLI reference', slug: 'docs/cli' },
+            { label: 'Cluster execution', slug: 'docs/cluster' }
           ]
         },
         {

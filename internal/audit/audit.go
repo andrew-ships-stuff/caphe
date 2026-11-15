@@ -53,6 +53,8 @@ type Options struct {
 	Concurrency  int
 	CapheVersion string
 	Registry     *adapters.Registry
+	Plan         *compiler.Plan
+	SourceLimits source.Limits
 	AI           AIOptions
 }
 
@@ -140,18 +142,23 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 	if err := validateAIOptions(options.AI); err != nil {
 		return Bundle{}, err
 	}
-	prepared, err := source.Prepare(options.Target)
+	prepared, err := source.PrepareWithLimits(options.Target, options.SourceLimits)
 	if err != nil {
 		return Bundle{}, err
 	}
 	defer prepared.Cleanup()
-	workflowDefinition, err := workflow.Load(options.Workflow)
-	if err != nil {
-		return Bundle{}, err
-	}
-	plan, err := compiler.New(options.Registry).Compile(workflowDefinition)
-	if err != nil {
-		return Bundle{}, err
+	plan := options.Plan
+	if plan == nil {
+		workflowDefinition, err := workflow.Load(options.Workflow)
+		if err != nil {
+			return Bundle{}, err
+		}
+		plan, err = compiler.New(options.Registry).Compile(workflowDefinition)
+		if err != nil {
+			return Bundle{}, err
+		}
+	} else if err := compiler.ValidateLock(plan, options.Registry); err != nil {
+		return Bundle{}, fmt.Errorf("validate workflow lock: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Join(options.DataDir, "artifacts"), 0o700); err != nil {
 		return Bundle{}, err
@@ -362,3 +369,7 @@ func setDigest(bundle *Bundle) error {
 	bundle.Digest = "sha256:" + hex.EncodeToString(sum[:])
 	return nil
 }
+
+// RecomputeDigest updates the content digest after a trusted renderer or
+// persistence boundary removes fields from a completed bundle.
+func RecomputeDigest(bundle *Bundle) error { return setDigest(bundle) }

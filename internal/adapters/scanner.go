@@ -61,6 +61,7 @@ func (s *Scanner) Validate(raw json.RawMessage) error {
 		allowed["input"] = true
 	case "scanner.checkov":
 		allowed["framework"] = true
+		allowed["includeSensitiveOutput"] = true
 	case "scanner.osv":
 		allowed["offline"] = true
 	case "scanner.kubescape":
@@ -88,6 +89,11 @@ func (s *Scanner) Validate(raw json.RawMessage) error {
 		if _, ok := c["framework"]; ok {
 			if _, err := requiredSafeString(c, "framework", false); err != nil {
 				return err
+			}
+		}
+		if value, ok := c["includeSensitiveOutput"]; ok {
+			if _, ok := value.(bool); !ok {
+				return fmt.Errorf("includeSensitiveOutput must be a boolean")
 			}
 		}
 	}
@@ -124,6 +130,15 @@ func (s *Scanner) Execute(ctx context.Context, req Request) (Result, error) {
 	out, _, code, err := RunCommand(ctx, req.Target, p, args, req.MaxOutput)
 	if err != nil && !(s.id == "scanner.osv" && code == 1) {
 		return Result{Command: append([]string{p}, args...), ExitCode: code, Duration: time.Since(start)}, err
+	}
+	if s.id == "scanner.checkov" {
+		includeSensitive, _ := cfg["includeSensitiveOutput"].(bool)
+		if !includeSensitive {
+			out, err = redactCheckovOutput(out)
+			if err != nil {
+				return Result{Command: append([]string{p}, args...), ExitCode: code, Duration: time.Since(start)}, err
+			}
+		}
 	}
 	parsed, err := ParseScannerOutput(s.id, out)
 	if err != nil {
@@ -176,6 +191,10 @@ func (s *Scanner) args(target string, cfg map[string]any, inputs map[string]stri
 		return append(args, "."), nil
 	case "scanner.checkov":
 		args := []string{"-d", ".", "-o", "json", "--soft-fail", "--skip-results-upload", "--skip-download"}
+		includeSensitive, _ := cfg["includeSensitiveOutput"].(bool)
+		if !includeSensitive {
+			args = append(args, "--compact")
+		}
 		if framework, ok := cfg["framework"].(string); ok && framework != "" {
 			args = append(args, "--framework", framework)
 		}
@@ -367,6 +386,37 @@ func parseCheckov(doc any, result *findings.Result) {
 	})
 }
 
+func redactCheckovOutput(raw []byte) ([]byte, error) {
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("parse scanner.checkov JSON for redaction: %w", err)
+	}
+	redactCheckovValue(doc)
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("encode redacted scanner.checkov JSON: %w", err)
+	}
+	return out, nil
+}
+
+func redactCheckovValue(value any) {
+	switch v := value.(type) {
+	case []any:
+		for _, child := range v {
+			redactCheckovValue(child)
+		}
+	case map[string]any:
+		for key, child := range v {
+			switch strings.ToLower(key) {
+			case "code_block", "connected_node", "evaluations", "fixed_definition", "entity_tags":
+				delete(v, key)
+			default:
+				redactCheckovValue(child)
+			}
+		}
+	}
+}
+
 func parseOPA(doc any, result *findings.Result) {
 	m, _ := doc.(map[string]any)
 	rows, _ := m["result"].([]any)
@@ -388,17 +438,26 @@ func appendOPAValue(value any, result *findings.Result) {
 		}
 	case map[string]any:
 		id := firstString(v, "id", "rule_id", "code")
+		if id == "" {
+			id = contentRuleID("policy-violation", v)
+		}
 		title := firstString(v, "message", "msg", "title")
 		path := firstString(v, "path", "file")
 		severity := firstString(v, "severity", "level")
 		result.Findings = append(result.Findings, newFinding("scanner.opa", id, title, severity, path, intNumber(v["line"]), v))
 	case string:
-		result.Findings = append(result.Findings, newFinding("scanner.opa", "policy-violation", v, "unknown", "", 0, map[string]any{"value": v}))
+		result.Findings = append(result.Findings, newFinding("scanner.opa", contentRuleID("policy-violation", v), v, "unknown", "", 0, map[string]any{"value": v}))
 	case bool:
 		if v {
 			result.Findings = append(result.Findings, newFinding("scanner.opa", "policy-violation", "OPA policy violation", "unknown", "", 0, map[string]any{"value": v}))
 		}
 	}
+}
+
+func contentRuleID(prefix string, value any) string {
+	data, _ := json.Marshal(value)
+	sum := sha256.Sum256(data)
+	return prefix + "-sha256:" + hex.EncodeToString(sum[:])
 }
 
 func walkJSON(value any, visit func(map[string]any)) {

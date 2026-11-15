@@ -102,6 +102,44 @@ func TestParseOPAResultContract(t *testing.T) {
 	}
 }
 
+func TestParseOPAResultsWithoutIDsRemainDistinct(t *testing.T) {
+	raw := []byte(`{"result":[{"expressions":[{"value":["first violation","second violation",{"message":"third violation"},{"message":"fourth violation"}]}]}]}`)
+	r, err := ParseScannerOutput("scanner.opa", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Findings) != 4 {
+		t.Fatalf("findings = %d, want 4", len(r.Findings))
+	}
+	seen := map[string]bool{}
+	for _, finding := range r.Findings {
+		if seen[finding.RuleID] {
+			t.Fatalf("duplicate generated rule ID %q", finding.RuleID)
+		}
+		seen[finding.RuleID] = true
+	}
+}
+
+func TestRedactCheckovOutput(t *testing.T) {
+	raw := []byte(`{"results":{"failed_checks":[{"check_id":"CKV_SECRET_1","check_name":"No secrets","file_path":"/main.tf","code_block":[[1,"sensitive marker"]],"connected_node":{"value":"test-sensitive-marker"},"evaluations":{"value":"test-sensitive-marker"},"fixed_definition":{"api_token":"test-sensitive-marker"},"entity_tags":{"api_token":"test-sensitive-marker"}}]}}`)
+	redacted, err := redactCheckovOutput(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sensitive := range []string{"test-sensitive-marker", "code_block", "connected_node", "evaluations", "fixed_definition", "entity_tags"} {
+		if strings.Contains(string(redacted), sensitive) {
+			t.Fatalf("redacted output contains %q: %s", sensitive, redacted)
+		}
+	}
+	parsed, err := ParseScannerOutput("scanner.checkov", redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parsed.Findings) != 1 || parsed.Findings[0].RuleID != "CKV_SECRET_1" {
+		t.Fatalf("redaction removed finding identity: %#v", parsed)
+	}
+}
+
 func TestNewScannerArgumentsAndValidation(t *testing.T) {
 	tests := []struct {
 		id     string
@@ -110,13 +148,18 @@ func TestNewScannerArgumentsAndValidation(t *testing.T) {
 		want   []string
 	}{
 		{id: "scanner.osv", binary: "osv-scanner", config: map[string]any{"offline": true}, want: []string{"scan", "source", "--format", "json", "--recursive", "--offline", "."}},
-		{id: "scanner.checkov", binary: "checkov", config: map[string]any{"framework": "terraform,kubernetes"}, want: []string{"-d", ".", "-o", "json", "--soft-fail", "--skip-results-upload", "--skip-download", "--framework", "terraform,kubernetes"}},
+		{id: "scanner.checkov", binary: "checkov", config: map[string]any{"framework": "terraform,kubernetes"}, want: []string{"-d", ".", "-o", "json", "--soft-fail", "--skip-results-upload", "--skip-download", "--compact", "--framework", "terraform,kubernetes"}},
+		{id: "scanner.checkov-sensitive", binary: "checkov", config: map[string]any{"includeSensitiveOutput": true}, want: []string{"-d", ".", "-o", "json", "--soft-fail", "--skip-results-upload", "--skip-download"}},
 		{id: "scanner.kubescape", binary: "kubescape", config: map[string]any{"useArtifactsFrom": ".kubescape"}, want: []string{"scan", ".", "--format", "sarif", "--use-artifacts-from", ".kubescape"}},
 		{id: "scanner.opa", binary: "opa", config: map[string]any{"policy": "policy/deny.rego", "query": "data.caphe.deny", "input": "input.json"}, want: []string{"eval", "--format", "json", "--data", "policy/deny.rego", "--input", "input.json", "data.caphe.deny"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			scanner := NewScanner(tt.id, tt.binary)
+			id := tt.id
+			if id == "scanner.checkov-sensitive" {
+				id = "scanner.checkov"
+			}
+			scanner := NewScanner(id, tt.binary)
 			raw, err := json.Marshal(tt.config)
 			if err != nil {
 				t.Fatal(err)
@@ -133,12 +176,50 @@ func TestNewScannerArgumentsAndValidation(t *testing.T) {
 			}
 		})
 	}
+	checkov := NewScanner("scanner.checkov", "checkov")
+	if err := checkov.Validate(json.RawMessage(`{"includeSensitiveOutput":"yes"}`)); err == nil {
+		t.Fatal("non-boolean includeSensitiveOutput accepted")
+	}
 
 	opa := NewScanner("scanner.opa", "opa")
 	for _, raw := range []json.RawMessage{json.RawMessage(`{}`), json.RawMessage(`{"policy":"../escape.rego","query":"data.deny"}`), json.RawMessage(`{"policy":"policy.rego","query":"-bad"}`), json.RawMessage(`{"policy":"policy.rego","query":"data.deny","extra":true}`)} {
 		if err := opa.Validate(raw); err == nil {
 			t.Fatalf("invalid OPA configuration accepted: %s", raw)
 		}
+	}
+}
+
+func TestCheckovExecuteRedactsRawOutputByDefault(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses a POSIX fake executable")
+	}
+	dir := t.TempDir()
+	tool := filepath.Join(dir, "checkov")
+	script := `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  echo '3.2.0'
+  exit 0
+fi
+printf '%s\n' '{"results":{"failed_checks":[{"check_id":"CKV_SECRET_1","check_name":"No secrets","file_path":"/main.tf","code_block":[[1,"sensitive marker"]],"evaluations":{"value":"test-sensitive-marker"}}]}}'
+`
+	if err := os.WriteFile(tool, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	scanner := NewScanner("scanner.checkov", "checkov")
+	redacted, err := scanner.Execute(t.Context(), Request{Target: dir, Config: json.RawMessage(`{}`), MaxOutput: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(redacted.Raw), "test-sensitive-marker") || len(redacted.Findings.Findings) != 1 {
+		t.Fatalf("default result was not safely redacted: %#v", redacted)
+	}
+	sensitive, err := scanner.Execute(t.Context(), Request{Target: dir, Config: json.RawMessage(`{"includeSensitiveOutput":true}`), MaxOutput: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sensitive.Raw), "test-sensitive-marker") {
+		t.Fatalf("explicit sensitive output was redacted: %s", sensitive.Raw)
 	}
 }
 

@@ -18,7 +18,7 @@ External output is capped at 64 MiB per invocation and stderr at 1 MiB. The raw 
 | --- | --- | --- |
 | `scanner.opa` | Required relative `policy` and `query`; optional relative `input` | OPA eval JSON values following the documented result object contract |
 | `scanner.osv` | Optional boolean `offline` | OSV-Scanner v2 JSON vulnerabilities; finding exit code `1` is accepted |
-| `scanner.checkov` | Optional `framework` | Failed checks from single- or multi-framework JSON |
+| `scanner.checkov` | Optional `framework`; dangerous opt-in `includeSensitiveOutput` | Failed checks from single- or multi-framework JSON; source blocks and evaluated values are redacted by default |
 | `scanner.kubescape` | Optional relative `useArtifactsFrom` directory | SARIF results from a local repository scan |
 
 To add an adapter, implement `internal/adapters.Adapter`, use a fixed ID and contract version, strictly validate JSON configuration, construct typed arguments, preserve raw output, and register it in `DefaultRegistry`. Dynamic Go plugins are intentionally unsupported.

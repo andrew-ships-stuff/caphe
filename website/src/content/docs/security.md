@@ -23,7 +23,7 @@ The workflow field `network: restricted` is recorded but is **not** enforced as 
 
 Caphe passes an executable and argument array directly instead of using a shell. It applies timeouts and bounded capture: scanner stdout is capped at 64 MiB and stderr at 1 MiB. These are availability controls, not a filesystem, syscall, process, memory, or network sandbox.
 
-Gitleaks runs in redacted JSON mode. Caphe additionally removes `secret`, `match`, and `entropy` fields from normalized properties. Raw output, other scanners, and source excerpts can still contain sensitive material.
+Gitleaks runs in redacted JSON mode. Caphe additionally removes `secret`, `match`, and `entropy` fields from normalized properties. Checkov runs in compact mode and has source blocks and evaluated values removed before persistence by default; `includeSensitiveOutput: true` deliberately disables that protection. Raw output from other scanners and source excerpts can still contain sensitive material.
 
 ## Prompt-injection resistance
 

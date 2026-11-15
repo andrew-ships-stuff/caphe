@@ -17,7 +17,9 @@ func (a *app) auditCmd() *cobra.Command {
 		if len(args) == 1 {
 			target = args[0]
 		}
+		stop := a.startSpinner("Running security audit")
 		bundle, err := audit.Run(cmd.Context(), audit.Options{Target: target, Workflow: workflowRef, DataDir: a.dataDir, Concurrency: concurrency, CapheVersion: Version, Registry: a.registry, AI: audit.AIOptions{Enabled: aiEnabled, Serve: aiServe, Endpoint: aiEndpoint, Model: aiModel, ModelDigest: aiModelDigest, ModelURL: aiModelURL, LlamaServer: aiLlamaServer, Threads: aiThreads, MaxCalls: maxModelCalls, MaxInputTokens: maxInputTokens, MaxOutputTokens: maxOutputTokens, MaxTotalTime: maxInferenceTime}})
+		stop()
 		if err != nil {
 			return err
 		}

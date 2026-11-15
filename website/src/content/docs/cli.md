@@ -10,7 +10,7 @@ This reference reflects the source command tree in the current `0.1.0-dev` snaps
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--data-dir PATH` | OS user config directory under `caphe` | State database and artifact directory. |
-| `--json` | `false` | Emit machine-readable JSON where supported. |
+| `--json` | `false` | Emit stable machine-readable JSON instead of the terminal presentation. |
 | `-h`, `--help` | — | Show command help. |
 
 ## Compile and execute
@@ -40,16 +40,18 @@ caphe audit [TARGET] [--workflow FILE] [--concurrency N]
 
 The tool commands include Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Detection does not install a tool or silently replace a missing executable.
 
+Interactive output uses aligned sections and status marks: `✓` succeeded or available, `✗` failed or missing, `!` a finding that needs attention, and `○` skipped, optional, or inactive. Audit and workflow spinners are enabled only for a terminal, never for redirected output. Add `--json` to any status or inspection command for automation.
+
 ## Findings, graph, and reports
 
 ```text
 caphe findings list
 caphe findings explain FINDING_ID
 caphe graph query --finding FINDING_ID
-caphe report [--format json|sarif|html] [-o|--output -]
+caphe report [--format table|json|sarif|html] [-o|--output -]
 ```
 
-Reports read persisted findings. JSON and SARIF include structured records; HTML is a self-contained local report. The default output is JSON to stdout.
+Reports read persisted findings. The default `table` format is human-readable. JSON and SARIF include structured records; HTML is a self-contained local report. `caphe report --json` selects JSON unless `--format` is explicitly provided.
 
 ## Optional inference
 

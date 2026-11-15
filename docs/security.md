@@ -1,6 +1,6 @@
 # Security model and limitations
 
-Workflows and repositories are untrusted. The compiler allowlists adapter IDs and configuration fields, rejects command/executable overrides, bounds retries/timeouts/resources, validates dependency references, and hashes the final lock. Runtime commands use argument arrays. Scanner stdout is bounded. Normalized Gitleaks records exclude discovered secret values.
+Workflows and repositories are untrusted. The compiler allowlists adapter IDs and configuration fields, rejects command/executable overrides, bounds retries/timeouts/resources, validates dependency references, and hashes the final lock. Runtime commands use argument arrays. Scanner stdout is bounded. Normalized Gitleaks records exclude discovered secret values. Checkov raw evidence has source blocks and evaluated values removed unless the workflow explicitly sets `includeSensitiveOutput: true`.
 
 `caphe init --project PATH` applies a deliberately small repository baseline: it creates missing Poutine and Dependabot configuration with exclusive file creation and does not replace existing policy. This convenience is not a complete repository-hardening audit.
 

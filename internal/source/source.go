@@ -14,6 +14,15 @@ const (
 	maxArchiveBytes = 4 << 30
 )
 
+type Limits struct {
+	MaxFiles         int
+	MaxExpandedBytes uint64
+}
+
+func DefaultLimits() Limits {
+	return Limits{MaxFiles: maxArchiveFiles, MaxExpandedBytes: maxArchiveBytes}
+}
+
 type Prepared struct {
 	Path    string
 	Display string
@@ -28,6 +37,11 @@ func (p Prepared) Cleanup() error {
 }
 
 func Prepare(target string) (Prepared, error) {
+	return PrepareWithLimits(target, DefaultLimits())
+}
+
+func PrepareWithLimits(target string, limits Limits) (Prepared, error) {
+	limits = normalizeLimits(limits)
 	if target == "" {
 		target = "."
 	}
@@ -49,27 +63,54 @@ func Prepare(target string) (Prepared, error) {
 	if !strings.EqualFold(filepath.Ext(resolved), ".zip") {
 		return Prepared{}, fmt.Errorf("target must be a directory or .zip archive: %s", target)
 	}
-	return extractZIP(resolved, target)
+	return extractZIP(resolved, target, limits)
 }
 
-func extractZIP(archivePath, display string) (prepared Prepared, err error) {
+func ValidateZIP(archivePath string, limits Limits) error {
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return fmt.Errorf("open ZIP target: %w", err)
+	}
+	defer reader.Close()
+	return validateZIPFiles(reader.File, normalizeLimits(limits))
+}
+
+func normalizeLimits(limits Limits) Limits {
+	if limits.MaxFiles <= 0 {
+		limits.MaxFiles = maxArchiveFiles
+	}
+	if limits.MaxExpandedBytes == 0 {
+		limits.MaxExpandedBytes = maxArchiveBytes
+	}
+	return limits
+}
+
+func validateZIPFiles(files []*zip.File, limits Limits) error {
+	if len(files) > limits.MaxFiles {
+		return fmt.Errorf("ZIP target contains too many entries: %d", len(files))
+	}
+	var size uint64
+	for _, file := range files {
+		var ok bool
+		size, ok = addArchiveSize(size, file.UncompressedSize64, limits.MaxExpandedBytes)
+		if !ok {
+			return fmt.Errorf("ZIP target exceeds %d byte extraction limit", limits.MaxExpandedBytes)
+		}
+		if !filepath.IsLocal(file.Name) || strings.Contains(file.Name, `\`) || file.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("ZIP target contains unsafe entry %q", file.Name)
+		}
+	}
+	return nil
+}
+
+func extractZIP(archivePath, display string, limits Limits) (prepared Prepared, err error) {
 	reader, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return Prepared{}, fmt.Errorf("open ZIP target: %w", err)
 	}
 	defer reader.Close()
-	if len(reader.File) > maxArchiveFiles {
-		return Prepared{}, fmt.Errorf("ZIP target contains too many entries: %d", len(reader.File))
-	}
-	var size uint64
-	for _, file := range reader.File {
-		size += file.UncompressedSize64
-		if size > maxArchiveBytes {
-			return Prepared{}, fmt.Errorf("ZIP target exceeds %d byte extraction limit", maxArchiveBytes)
-		}
-		if !filepath.IsLocal(file.Name) || strings.Contains(file.Name, `\`) || file.Mode()&os.ModeSymlink != 0 {
-			return Prepared{}, fmt.Errorf("ZIP target contains unsafe entry %q", file.Name)
-		}
+	if err := validateZIPFiles(reader.File, limits); err != nil {
+		return Prepared{}, err
 	}
 	root, err := os.MkdirTemp("", "caphe-source-")
 	if err != nil {
@@ -98,6 +139,13 @@ func extractZIP(archivePath, display string) (prepared Prepared, err error) {
 	}
 	prepared.Path = unwrapSingleDirectory(root)
 	return prepared, nil
+}
+
+func addArchiveSize(total, next, limit uint64) (uint64, bool) {
+	if total > limit || next > limit-total {
+		return 0, false
+	}
+	return total + next, true
 }
 
 func extractFile(file *zip.File, path string) error {

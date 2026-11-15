@@ -66,4 +66,6 @@ The optional provider speaks to a loopback-only `llama.cpp` HTTP endpoint. Input
 
 ## Local and distributed execution
 
-Local execution is implemented. A Dockerfile is present for container builds. Kubernetes workers, scheduler leases, capability-aware placement, Helm packaging, and distributed transport are roadmap items; no deployable cluster control plane is shipped.
+Local execution and whole-audit distributed workers are implemented. `caphe cluster` registers compiled locks by digest, accepts immutable Git commits or bounded ZIP uploads through a tenant-authenticated API, and publishes the same audit bundle through renewable at-least-once worker leases. Docker Compose and Helm packaging are included; Kubernetes workers have a default-deny network policy.
+
+The first distributed queue uses shared filesystem storage. Kubernetes custom resources, object storage, OIDC, capability-aware placement, task-level fan-out, and exactly-once execution remain roadmap items.
