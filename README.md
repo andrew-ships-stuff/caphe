@@ -124,6 +124,10 @@ helm upgrade --install caphe deployments/helm/caphe --set auth.existingSecret=ca
 
 See [docs/cluster.md](docs/cluster.md) for authentication, storage, network isolation, submission, and current scalability boundaries. Cluster workers intentionally disable inference today; adding service-side CPU inference requires server-owned model, digest, and budget policy.
 
+## GitHub CI for other repositories
+
+Caphe ships a reusable composite Action and a fork-safe two-workflow review pattern. See [CI_SETUP_FOR_NEW_REPOS.md](CI_SETUP_FOR_NEW_REPOS.md) for complete copy/paste analyzer and trusted-publisher workflows, required permissions, branch-protection guidance, optional bounded CPU inference, and the pinned upgrade procedure. The consumer template currently uses `caphe:git-security` for GitHub Actions scanning; it does not claim the full local `caphe audit .` scanner suite.
+
 ## Five-minute local demo
 
 The included fixture is deliberately vulnerable and must not be deployed.
