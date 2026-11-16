@@ -41,18 +41,28 @@ type app struct {
 
 func Execute(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	a := &app{stdout: stdout, stderr: stderr, registry: adapters.DefaultRegistry()}
+	a.addManagedToolsToPath()
 	cmd := a.root()
 	cmd.SetArgs(args)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	return cmd.ExecuteContext(ctx)
 }
+
+func (a *app) addManagedToolsToPath() {
+	binDir := managedToolBin()
+	info, err := os.Stat(binDir)
+	if err != nil || !info.IsDir() || pathContains(os.Getenv("PATH"), binDir) {
+		return
+	}
+	_ = os.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+binDir)
+}
 func (a *app) root() *cobra.Command {
 	c := &cobra.Command{Use: "caphe", Short: "Compile and execute evidence-first security workflows", SilenceUsage: true, SilenceErrors: true}
 	defaultDir, _ := os.UserConfigDir()
 	c.PersistentFlags().StringVar(&a.dataDir, "data-dir", filepath.Join(defaultDir, "caphe"), "state and artifact directory")
 	c.PersistentFlags().BoolVar(&a.jsonOutput, "json", false, "emit machine-readable JSON")
-	c.AddCommand(a.version(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.clusterCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
+	c.AddCommand(a.version(), a.setupCmd(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.clusterCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
 	return c
 }
 func (a *app) print(v any) error {

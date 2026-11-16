@@ -14,11 +14,11 @@ func TestDoctorHumanOutput(t *testing.T) {
 	var out bytes.Buffer
 	a := &app{stdout: &out}
 	report := doctorReport{
-		Healthy:   true,
-		Storage:   storageReport{Path: "/tmp/caphe", Available: true},
-		Hardware:  hardware.Inspection{OS: "darwin", Architecture: "arm64", LogicalCores: 10, PhysicalCores: 8, TotalMemoryBytes: 32 << 30, AvailableMemoryBytes: 12 << 30, DiskFreeBytes: 100 << 30},
-		Tools:     []adapters.ToolInfo{{ID: "scanner.opa", Available: true, Path: "/bin/opa", Version: "Version: 1.0.0"}, {ID: "scanner.osv", Error: `exec: "osv-scanner": executable file not found in $PATH`}},
-		Inference: inferenceReport{Provider: "llama.cpp", Endpoint: "http://127.0.0.1:8080", RuntimeAvailable: true, RuntimePath: "/tmp/llama-server", LaunchMode: "ephemeral-loopback-subprocess"},
+		Healthy:     true,
+		Storage:     storageReport{Path: "/tmp/caphe", Available: true},
+		Hardware:    hardware.Inspection{OS: "darwin", Architecture: "arm64", LogicalCores: 10, PhysicalCores: 8, TotalMemoryBytes: 32 << 30, AvailableMemoryBytes: 12 << 30, DiskFreeBytes: 100 << 30},
+		Tools:       []adapters.ToolInfo{{ID: "scanner.opa", Available: true, Path: "/bin/opa", Version: "Version: 1.0.0"}, {ID: "scanner.osv", Error: `exec: "osv-scanner": executable file not found in $PATH`}},
+		Inference:   inferenceReport{Provider: "llama.cpp", Endpoint: "http://127.0.0.1:8080", RuntimeAvailable: true, RuntimePath: "/tmp/llama-server", LaunchMode: "ephemeral-loopback-subprocess"},
 		Suggestions: []doctorSuggestion{{Title: "Run the first audit", Commands: []string{"caphe audit ."}}},
 	}
 	if err := a.print(report); err != nil {

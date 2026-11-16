@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,6 +37,32 @@ func TestFindManagedInstallerFromRepository(t *testing.T) {
 	}
 	if !strings.HasSuffix(filepath.ToSlash(path), "scripts/install-tools.sh") {
 		t.Fatalf("unexpected installer: %s", path)
+	}
+}
+
+func TestFindManagedInstallerHonorsOverride(t *testing.T) {
+	installer := filepath.Join(t.TempDir(), "install-tools.sh")
+	if err := os.WriteFile(installer, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CAPHE_INSTALLER", installer)
+	got, err := findManagedInstaller()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != installer {
+		t.Fatalf("installer = %q, want %q", got, installer)
+	}
+}
+
+func TestAddManagedToolsToPath(t *testing.T) {
+	binDir := t.TempDir()
+	t.Setenv("CAPHE_TOOL_BIN", binDir)
+	t.Setenv("PATH", "/usr/bin")
+	a := &app{}
+	a.addManagedToolsToPath()
+	if got := os.Getenv("PATH"); !strings.HasSuffix(got, string(os.PathListSeparator)+binDir) {
+		t.Fatalf("PATH = %q, want managed directory appended", got)
 	}
 }
 

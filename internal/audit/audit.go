@@ -44,6 +44,7 @@ type AIOptions struct {
 	MaxInputTokens  int
 	MaxOutputTokens int
 	MaxTotalTime    time.Duration
+	BestEffort      bool
 }
 
 type Options struct {
@@ -56,6 +57,25 @@ type Options struct {
 	Plan         *compiler.Plan
 	SourceLimits source.Limits
 	AI           AIOptions
+	Progress     ProgressFunc
+}
+
+type ProgressEvent struct {
+	Kind          string
+	Task          capheruntime.TaskResult
+	FindingCount  int
+	GroupCount    int
+	ProposalCount int
+	Model         string
+	Message       string
+}
+
+type ProgressFunc func(ProgressEvent)
+
+func reportProgress(options Options, event ProgressEvent) {
+	if options.Progress != nil {
+		options.Progress(event)
+	}
 }
 
 type Recommendation struct {
@@ -180,7 +200,13 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 		return Bundle{}, err
 	}
 	defer store.Close()
-	executor := capheruntime.New(options.Registry, artifacts.New(filepath.Join(options.DataDir, "artifacts")), store, options.Concurrency)
+	executor := capheruntime.New(options.Registry, artifacts.New(filepath.Join(options.DataDir, "artifacts")), store, options.Concurrency).WithProgress(func(event capheruntime.TaskEvent) {
+		kind := "task_started"
+		if event.Done {
+			kind = "task_finished"
+		}
+		reportProgress(options, ProgressEvent{Kind: kind, Task: event.Result})
+	})
 	manifest, runErr := executor.Run(ctx, plan, prepared.Path)
 	if runErr != nil {
 		return Bundle{}, fmt.Errorf("workflow execution failed: %w", runErr)
@@ -206,11 +232,14 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 	for _, finding := range bundle.Findings {
 		bundle.Recommendations = append(bundle.Recommendations, Recommendation{FindingID: finding.ID, EvidenceIDs: []string{finding.ID}, Explanation: fmt.Sprintf("%s reported %s%s.", finding.Tool, finding.RuleID, locationSuffix(finding)), Remediation: "Review the cited scanner evidence and apply the narrowest change that removes the reported condition; rerun caphe audit to verify.", Source: "deterministic", Status: "evidence-backed-recommendation"})
 	}
+	reportProgress(options, ProgressEvent{Kind: "evidence_ready", FindingCount: len(bundle.Findings)})
 	if options.AI.Enabled {
 		if err := attachAI(ctx, &bundle, options); err != nil {
 			return Bundle{}, err
 		}
 	}
+	groups, _ := buildRemediation(&bundle)
+	reportProgress(options, ProgressEvent{Kind: "remediation_ready", FindingCount: len(bundle.Findings), GroupCount: len(groups)})
 	if err := setDigest(&bundle); err != nil {
 		return Bundle{}, err
 	}
@@ -248,29 +277,34 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 	bundle.AI = AIInfo{Enabled: true, Model: ai.Model, ModelDigest: ai.ModelDigest, Endpoint: ai.Endpoint}
 	endpoint := ai.Endpoint
 	if ai.Serve {
+		bundle.AI.Endpoint = "ephemeral-loopback"
+		reportProgress(options, ProgressEvent{Kind: "ai_runtime_started", Model: ai.Model})
+		if _, err := inference.ResolveLlamaServer(ai.LlamaServer); err != nil {
+			return unavailableAI(bundle, options, err)
+		}
 		modelPath, err := inference.EnsureModel(ctx, filepath.Join(options.DataDir, "models"), ai.ModelURL, ai.ModelDigest)
 		if err != nil {
-			return err
+			return unavailableAI(bundle, options, err)
 		}
 		server, err := inference.StartServer(ctx, inference.ServerOptions{Binary: ai.LlamaServer, ModelPath: modelPath, Threads: ai.Threads})
 		if err != nil {
-			return err
+			return unavailableAI(bundle, options, err)
 		}
 		defer server.Stop()
 		endpoint = server.Endpoint
 		bundle.AI.Endpoint = endpoint
+		reportProgress(options, ProgressEvent{Kind: "ai_runtime_finished", Model: ai.Model})
 	}
 	provider, err := inference.NewLlamaCPP(endpoint, ai.MaxTotalTime)
 	if err != nil {
-		return err
+		return unavailableAI(bundle, options, err)
 	}
 	available, err := provider.Available(ctx)
 	if err != nil {
-		return err
+		return unavailableAI(bundle, options, err)
 	}
 	if !available {
-		bundle.AI.Errors = append(bundle.AI.Errors, "local llama.cpp endpoint unavailable; deterministic bundle completed")
-		return nil
+		return unavailableAI(bundle, options, fmt.Errorf("local llama.cpp endpoint unavailable"))
 	}
 	deadline, cancel := context.WithTimeout(ctx, ai.MaxTotalTime)
 	defer cancel()
@@ -278,8 +312,17 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 	for _, finding := range bundle.Findings {
 		allowed[finding.ID] = true
 	}
+	reviewed := 0
+	reportProgress(options, ProgressEvent{Kind: "ai_review_started", FindingCount: len(bundle.Findings), Model: ai.Model})
+	reviewCallLimit := ai.MaxCalls
+	if len(bundle.Findings) > 0 && reviewCallLimit > 1 {
+		reviewCallLimit-- // reserve repository synthesis
+	}
+	if len(bundle.Findings) > 1 && reviewCallLimit > 1 {
+		reviewCallLimit-- // reserve remediation-group deduplication
+	}
 	for i := range bundle.Recommendations {
-		if bundle.AI.Calls >= ai.MaxCalls {
+		if bundle.AI.Calls >= reviewCallLimit {
 			break
 		}
 		if bundle.Recommendations[i].Source != "deterministic" {
@@ -309,8 +352,11 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 			continue
 		}
 		bundle.Recommendations[i] = Recommendation{FindingID: finding.ID, EvidenceIDs: validated.EvidenceIDs, Explanation: validated.Explanation, Remediation: validated.Remediation, Source: "ai", Status: "hypothesis", ModelDigest: ai.ModelDigest, PromptVersion: inference.ReviewPromptVersion, SchemaVersion: inference.ReviewSchemaVersion}
+		reviewed++
 	}
+	reportProgress(options, ProgressEvent{Kind: "ai_review_finished", FindingCount: reviewed, ProposalCount: len(bundle.Findings), Model: ai.Model})
 	if bundle.AI.Calls < ai.MaxCalls && len(bundle.Findings) > 0 {
+		reportProgress(options, ProgressEvent{Kind: "ai_synthesis_started", FindingCount: len(bundle.Findings), Model: ai.Model})
 		bundle.AI.Calls++
 		overview := synthesisContext(bundle)
 		if len(overview) > ai.MaxInputTokens*4 {
@@ -333,10 +379,12 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 				}
 			}
 		}
+		reportProgress(options, ProgressEvent{Kind: "ai_synthesis_finished", ProposalCount: lenSynthesisPriorities(bundle.Synthesis), Model: ai.Model})
 	}
 	if bundle.AI.Calls < ai.MaxCalls && len(bundle.Findings) > 0 {
 		groups, _ := buildRemediation(bundle)
 		if len(groups) >= 2 {
+			reportProgress(options, ProgressEvent{Kind: "ai_dedup_started", GroupCount: len(groups), Model: ai.Model})
 			overview, err := dedupContext(bundle, groups)
 			if err != nil {
 				bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
@@ -362,10 +410,28 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 					}
 				}
 			}
+			reportProgress(options, ProgressEvent{Kind: "ai_dedup_finished", GroupCount: len(groups), ProposalCount: len(bundle.Dedup), Model: ai.Model})
 		}
 	}
 	bundle.Metrics.ModelCalls = bundle.AI.Calls
 	return nil
+}
+
+func unavailableAI(bundle *Bundle, options Options, err error) error {
+	if !options.AI.BestEffort {
+		return err
+	}
+	message := err.Error() + "; deterministic bundle completed"
+	bundle.AI.Errors = append(bundle.AI.Errors, message)
+	reportProgress(options, ProgressEvent{Kind: "ai_unavailable", Model: options.AI.Model, Message: err.Error()})
+	return nil
+}
+
+func lenSynthesisPriorities(synthesis *Synthesis) int {
+	if synthesis == nil {
+		return 0
+	}
+	return len(synthesis.Priorities)
 }
 
 func dedupContext(bundle *Bundle, groups []remediationGroup) ([]byte, error) {

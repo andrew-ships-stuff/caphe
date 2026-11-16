@@ -23,9 +23,10 @@ caphe validate LOCKFILE
 caphe run LOCKFILE [--target .] [--concurrency N]
 caphe scan TARGET [--workflow FILE] [--concurrency N]
 caphe audit [TARGET] [--workflow FILE] [--concurrency N]
+caphe setup [--tools LIST] [--ai=false] [--install]
 ```
 
-`scan` compiles and runs in one process. With no `--workflow`, both `scan` and `audit` load the embedded `caphe:default` workflow. `audit` also correlates evidence and writes digest-pinned JSON, SARIF, Markdown, and HTML outputs. `run` validates a compiled lock before execution.
+`scan` compiles and runs in one process. With no `--workflow`, both `scan` and `audit` load the embedded `caphe:default` workflow unless `caphe setup` has saved a selected default workflow. `setup` initializes local state, interactively chooses the default scanners and bounded CPU-inference preference, and offers to install missing selected pinned tools. `--install` performs that repair explicitly. `audit` also correlates evidence and writes digest-pinned JSON, SARIF, Markdown, and HTML outputs. `run` validates a compiled lock before execution.
 
 ## Inspect the installation
 
@@ -33,14 +34,14 @@ caphe audit [TARGET] [--workflow FILE] [--concurrency N]
 | --- | --- |
 | `caphe version` | Print Caphe, compiler, Go, OS, and architecture versions. |
 | `caphe doctor` | Inspect storage, hardware, scanners, and loopback inference availability. |
-| `caphe init` | Initialize local SQLite state and artifact storage. |
+| `caphe init` | Optionally initialize state and add missing Poutine/Dependabot repository configuration; it is not required before audit. |
 | `caphe hardware inspect` | Report CPU, memory, disk, container, and declared limit data. |
 | `caphe tools list` | List detected registered scanner adapters. |
 | `caphe tools doctor` | Inspect the same scanner detection information for diagnostics. |
 
 The tool commands include Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Detection does not install a tool or silently replace a missing executable.
 
-Interactive output uses aligned sections and status marks: `✓` succeeded or available, `✗` failed or missing, `!` a finding that needs attention, and `○` skipped, optional, or inactive. Audit and workflow spinners are enabled only for a terminal, never for redirected output. Add `--json` to any status or inspection command for automation.
+Interactive output uses aligned sections and status marks: `✓` succeeded or available, `✗` failed or missing, `!` a finding that needs attention, and `○` skipped, optional, or inactive. `audit` narrates each real scanner and core task with completion status, finding counts, and duration, and prints an actionable install command when a scanner is unavailable. Interactive audits use the pinned, bounded CPU model by default; pass `--ai=false` for scanner-only execution. Deterministic remediation and model-hypothesis stages follow. Concurrent tasks can complete in a different order. Add `--json` to suppress the narrative and retain stable machine-readable stdout for automation.
 
 ## Findings, graph, and reports
 

@@ -3,49 +3,48 @@ title: Getting started
 description: Build Caphe, install the scanners your workflow needs, and run a first local scan.
 ---
 
-import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Aside, Steps } from '@astrojs/starlight/components';
 
-Caphe is currently a development snapshot. The reliable installation path is a source build; a stable release channel is not claimed yet.
+Caphe publishes checksum-pinned release binaries through its Homebrew tap. A source build remains available for contributors.
 
 ## Requirements
 
-- Go 1.26 or newer.
-- Git and a supported terminal.
+- Homebrew for the shortest install, or Go 1.26+ for a source build.
 - Only the scanner executables referenced by your selected workflow. The included local demo needs [Opengrep](https://github.com/opengrep/opengrep) and [Syft](https://github.com/anchore/syft).
 - No GPU, LLM API key, Docker, Kubernetes, or database server is required.
 
 <Steps>
 
-1. **Clone and build**
+1. **Install Caphe**
 
    ```bash
-   git clone https://github.com/andrew-ships-stuff/caphe.git
-   cd caphe
-   go build -o caphe ./cmd/caphe
-   ./caphe version
+   brew install andrew-ships-stuff/tap/caphe
+   caphe version
    ```
 
-2. **Inspect the environment**
+   For a source build, clone the repository and run `go build -o caphe ./cmd/caphe` with Go 1.26 or newer.
+
+2. **Complete first-run setup**
 
    ```bash
-   ./caphe doctor
-   ./caphe tools doctor
+   caphe setup
    ```
 
-   Missing scanners are reported. Caphe does not substitute generated or mock findings.
+   Setup initializes local state, lets you choose the default scanners and bounded CPU inference, and offers to install every missing checksum-pinned tool needed by that selection. Caphe discovers its managed tool directory automatically, so no shell `PATH` edit is required. Run `caphe setup --install` later to repair a partial installation, or `caphe doctor` to inspect it. Caphe does not substitute generated or mock findings.
 
-3. **Validate and compile the demo workflow**
+3. **Run the fixed audit workflow**
 
    ```bash
-   ./caphe workflows validate workflows/demo-local.yaml
-   ./caphe compile workflows/demo-local.yaml --output demo.lock.json
-   ./caphe validate demo.lock.json
+   caphe audit .
    ```
 
-4. **Run the deliberately vulnerable fixture**
+   The terminal narrates each scanner and core task, reports skips and finding counts, then builds the deterministic remediation plan. Missing optional scanners do not fail the audit. Use `--json` for quiet, stable machine output.
+
+4. **Optionally run the deliberately vulnerable fixture from a source checkout**
 
    ```bash
-   ./caphe run demo.lock.json --target examples/vulnerable-go
+   ./caphe workflows validate caphe:demo-local
+   ./caphe audit examples/vulnerable-go --workflow caphe:demo-local
    ```
 
    <Aside type="caution" title="Fixture only">The example is intentionally vulnerable. Do not deploy it.</Aside>
@@ -53,10 +52,8 @@ Caphe is currently a development snapshot. The reliable installation path is a s
 5. **Inspect and export results**
 
    ```bash
-   ./caphe findings list
-   ./caphe report --format json --output caphe-report.json
-   ./caphe report --format sarif --output caphe-report.sarif
-   ./caphe report --format html --output caphe-report.html
+   caphe findings list
+   open caphe-audit.html
    ```
 
 </Steps>
@@ -66,26 +63,26 @@ Caphe is currently a development snapshot. The reliable installation path is a s
 Caphe stores SQLite state and content-addressed raw artifacts under the user configuration directory in a `caphe/` folder. Use an isolated location in CI or tests:
 
 ```bash
-./caphe --data-dir .caphe-ci scan . --workflow workflows/demo-local.yaml
+caphe --data-dir .caphe-ci audit . --json
 ```
 
 ## Optional CPU inference
 
-Inference is not required for scanning. Caphe can connect to an already-running, compatible `llama.cpp` server on loopback only.
+Inference is not required for scanning. Interactive audits enable the pinned CPU model by default when the runtime is available; use `caphe audit . --ai=false` for scanner-only execution. Caphe can connect to an already-running compatible `llama.cpp` server on loopback or download the digest-verified default model and launch a private CPU server for one audit.
 
 ```bash
-./caphe hardware inspect --json
-./caphe ai recommend --json
-./caphe ai doctor --json
+caphe hardware inspect --json
+caphe ai recommend --json
+caphe ai doctor --json
 ```
 
-Managed runtime and model downloads are not implemented. See [CPU inference](../cpu-inference/) before using `ai analyze`.
+Use the complete command printed by `caphe doctor` to enable `audit --ai --ai-serve`; it includes the model name, HTTPS source, and required digest. All accepted model text remains an unverified hypothesis. See [CPU inference](../cpu-inference/) for the trust boundary.
 
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| `scanner executable not found` | Install the tool required by the workflow, ensure it is on `PATH`, then run `caphe tools doctor`. |
+| `scanner executable not found` | Run `caphe setup --install`, then `caphe tools doctor`. |
 | Lock validation fails | Recompile after changing the workflow or adapter contract. Locks are tamper-evident. |
 | A required task is skipped | Inspect the execution manifest for a failed dependency. Optional dependencies must be declared in both `needs` and `optionalNeeds`. |
 | Inference server unavailable | Confirm `llama-server` is listening on `localhost`, `127.0.0.1`, or `::1`. Remote endpoints are rejected. |

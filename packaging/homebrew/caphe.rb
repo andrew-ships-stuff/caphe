@@ -8,6 +8,7 @@ class Caphe < Formula
 
   def install
     system "go", "build", *std_go_args(ldflags: "-s -w"), "./cmd/caphe"
+    libexec.install "scripts/install-tools.sh"
   end
 
   test do

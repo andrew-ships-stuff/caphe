@@ -5,7 +5,7 @@ description: The implemented loopback llama.cpp boundary, model recommendations,
 
 import { Aside } from '@astrojs/starlight/components';
 
-Caphe's deterministic engine is fully useful without a model. Optional inference is CPU-only by product design and connects to an already-running `llama.cpp` server.
+Caphe's deterministic engine is fully useful without a model, but interactive audits are AI-first: they attempt the pinned CPU model by default and fall back cleanly when the runtime is unavailable. Pass `--ai=false` for scanner-only execution. Inference runs through a private loopback `llama.cpp` server.
 
 ## What exists today
 
@@ -13,11 +13,13 @@ Caphe's deterministic engine is fully useful without a model. Optional inference
 - Conservative recommendations based on current available memory and a safety reserve.
 - Three GGUF Q4_K_M candidate entries, all labeled `candidate-unvalidated`.
 - A loopback-only HTTP provider using `llama.cpp`'s chat completions interface.
-- Strict JSON-schema output for `infer_security_invariant`.
+- Strict JSON-schema output for per-finding remediation, repository synthesis, remediation-group deduplication, and invariant analysis.
 - Cache keys over model digest, prompt/schema versions, canonical context, and configuration.
 - Storage of valid output only as a `hypothesized` evidence node.
 
-Managed llama.cpp downloads, model provisioning, checksum registry, server lifecycle, cache management commands, inference queueing, and persistent benchmark data are not implemented.
+`caphe audit --ai-serve` downloads the explicitly identified model, verifies its required SHA-256 digest, caches it, launches the pinned or explicitly selected runtime on an ephemeral loopback port, and stops it after the audit. `caphe setup` provisions the checksum-pinned runtime from Homebrew or a source checkout. General-purpose model install/remove commands, inference queueing, and persistent benchmark data are not implemented.
+
+Run `caphe setup` to choose the default scanner workflow and whether bounded CPU inference is enabled. Setup offers to install the pinned `llama.cpp` runtime, and `caphe setup --install` repairs it later. Interactive audits enable it by default even before setup; non-interactive and JSON audits require an explicit or saved preference.
 
 ## Inspect and recommend
 
@@ -56,4 +58,4 @@ The command requires a finding, model identifier, and verified content digest. T
 
 The model must return exactly one object containing an allowlisted invariant type, property, subjects, required evidence, an allowlisted verification strategy, and literal `confidence: hypothesis`. Unknown fields, trailing JSON, invalid values, and extra prose are rejected.
 
-When the provider is missing or output is invalid, Caphe returns an error and leaves deterministic evidence unchanged. The model never controls the executor.
+Implicit interactive inference degrades cleanly when the runtime is missing and leaves the deterministic bundle intact. Explicit required inference reports an error when provisioning fails. Invalid individual model responses are rejected and recorded without changing scanner evidence. The model never controls the executor.

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 
@@ -72,8 +73,8 @@ func doctorSuggestions(tools []adapters.ToolInfo, inferenceStatus inferenceRepor
 	})
 	if inferenceStatus.RuntimeAvailable || contains(missingManaged, "llama.cpp") {
 		suggestions = append(suggestions, doctorSuggestion{
-			Title:  "Optionally add one bounded local AI pass",
-			Reason: "Caphe downloads the digest-verified model, launches llama-server on an ephemeral loopback port, labels output as hypothesis, and stops the process afterward.",
+			Title:    "Optionally add one bounded local AI pass",
+			Reason:   "Caphe downloads the digest-verified model, launches llama-server on an ephemeral loopback port, labels output as hypothesis, and stops the process afterward.",
 			Commands: []string{fmt.Sprintf("caphe audit . --ai --ai-serve --ai-model %s --ai-model-url %s --ai-model-digest %s", shellQuote(dogfoodModelName), shellQuote(dogfoodModelURL), shellQuote(dogfoodModelDigest))},
 		})
 	}
@@ -123,7 +124,15 @@ func (a *app) applyDoctorFixes(ctx context.Context, tools []adapters.ToolInfo, r
 	if len(requested) == 0 {
 		return nil
 	}
+	return a.installManagedTools(ctx, requested)
+}
+
+func (a *app) installManagedTools(ctx context.Context, requested []string) error {
+	if len(requested) == 0 {
+		return nil
+	}
 	sort.Strings(requested)
+	requested = slices.Compact(requested)
 	installer, err := findManagedInstaller()
 	if err != nil {
 		return err
@@ -145,6 +154,12 @@ func (a *app) applyDoctorFixes(ctx context.Context, tools []adapters.ToolInfo, r
 }
 
 func findManagedInstaller() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("CAPHE_INSTALLER")); override != "" {
+		if info, err := os.Stat(override); err == nil && !info.IsDir() {
+			return override, nil
+		}
+		return "", fmt.Errorf("CAPHE_INSTALLER does not point to a file: %s", override)
+	}
 	dir, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -163,7 +178,17 @@ func findManagedInstaller() (string, error) {
 		}
 		dir = parent
 	}
-	return "", fmt.Errorf("caphe doctor --fix requires a Caphe source checkout containing scripts/install-tools.sh; run the suggested install command from the repository root")
+	if executable, executableErr := os.Executable(); executableErr == nil {
+		for _, candidate := range []string{
+			filepath.Join(filepath.Dir(executable), "..", "libexec", "install-tools.sh"),
+			filepath.Join(filepath.Dir(executable), "..", "libexec", "caphe", "install-tools.sh"),
+		} {
+			if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+				return filepath.Clean(candidate), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("managed installer not found; reinstall Caphe or run from a Caphe source checkout")
 }
 
 func fileContains(path, wanted string) bool {

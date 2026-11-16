@@ -1,23 +1,26 @@
-.PHONY: build install uninstall tools-install test test-e2e test-e2e-real vet check demo
+.PHONY: build install uninstall install-tools tools-install test test-e2e test-e2e-real vet check demo
 
 CAPHE_CACHE ?= $(HOME)/.cache/caphe
 CAPHE_BIN ?= $(CAPHE_CACHE)/bin
+TOOLS ?= poutine,actionlint,syft,grype,gitleaks,llama.cpp
 
 build:
 	go build -o bin/caphe ./cmd/caphe
 
 install: build
-	@mkdir -p "$(CAPHE_BIN)"
+	@mkdir -p "$(CAPHE_BIN)" "$(CAPHE_CACHE)/libexec"
 	install -m 0755 bin/caphe "$(CAPHE_BIN)/caphe"
+	install -m 0755 scripts/install-tools.sh "$(CAPHE_CACHE)/libexec/install-tools.sh"
 	@echo "Installed to $(CAPHE_BIN)/caphe"
-	@echo 'Add to your shell profile: export PATH="$(CAPHE_BIN):$$PATH"'
+	@echo "Caphe automatically discovers managed tools in $(CAPHE_BIN)."
 
 uninstall:
 	@unlink "$(CAPHE_BIN)/caphe" 2>/dev/null || true
+	@unlink "$(CAPHE_CACHE)/libexec/install-tools.sh" 2>/dev/null || true
 	@echo "Removed $(CAPHE_BIN)/caphe; delete $(CAPHE_CACHE) to remove all Caphe-managed state and tools."
 
-tools-install:
-	bash scripts/install-tools.sh --bin-dir "$(CAPHE_BIN)"
+install-tools tools-install:
+	bash scripts/install-tools.sh --bin-dir "$(CAPHE_BIN)" --tools "$(TOOLS)"
 
 test:
 	go test ./...
