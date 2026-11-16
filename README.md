@@ -60,15 +60,18 @@ caphe tools doctor
 
 Caphe never silently substitutes generated findings when a scanner is missing. On macOS, Linux, and Windows, install scanner releases from their respective upstream projects: Opengrep, Anchore Syft, Anchore Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Pin versions in CI and preserve the execution manifest that records detected versions.
 
-For an easily removable local toolchain, Caphe can install every checksum-pinned default-audit tool into its own cache. Both target names work; use `TOOLS=` to install only a subset:
+For an easily removable local toolchain, `make install` builds and installs Caphe and calls `install-tools` to install the checksum-pinned managed tools. The standalone tool targets also work; use `TOOLS=` to install only a subset:
 
 ```bash
+make install
 make install-tools
 make tools-install TOOLS=syft,grype,gitleaks
 caphe tools doctor
 ```
 
-The default managed set is Poutine, Syft, Grype, Gitleaks, `llama.cpp`, and the repository companion actionlint. Set `CAPHE_CACHE` or pass `scripts/install-tools.sh --bin-dir PATH` to choose another location. Removing that dedicated directory removes the managed binaries. Caphe does not install system packages or request elevated privileges.
+The default managed set is Poutine, Syft, Grype, Gitleaks, `llama.cpp`, and the repository companion actionlint. Opengrep must be installed separately. The default cache is `${XDG_CACHE_HOME:-$HOME/.cache}/caphe`; set `CAPHE_CACHE` or pass `scripts/install-tools.sh --bin-dir PATH` to choose another location. Add its `bin` directory to `PATH` to invoke Caphe. Removing that dedicated directory removes the managed binaries. Caphe does not install system packages or request elevated privileges. Use `make build` to build only Caphe without downloading tools.
+
+Installing Grype does not refresh or repair its vulnerability database. If an audit skips Grype because its database is stale, run `grype db update` using the managed binary (by default, `${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin/grype`). If database corruption persists, `grype db delete` followed by `grype db update` rebuilds the local database; the update requires network access. A repeated hydration/migration failure may require an upstream Grype fix and a separately reviewed version/checksum pin update. Do not disable database age validation to make the scan pass.
 
 Homebrew users can install commonly used tools independently:
 

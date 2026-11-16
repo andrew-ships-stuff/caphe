@@ -50,3 +50,25 @@ func TestAuditProgressIsSilentForJSON(t *testing.T) {
 		t.Fatalf("JSON audit wrote progress: %q", output.String())
 	}
 }
+
+func TestAuditProgressGrypeDatabaseRecovery(t *testing.T) {
+	for _, reason := range []string{
+		"scanner process: exit status 1: current database is invalid",
+		"failed to load vulnerability db: unable to migrate: constraint failed",
+	} {
+		t.Run(reason, func(t *testing.T) {
+			var output bytes.Buffer
+			a := &app{stdout: &output}
+			a.auditProgress(".", "caphe:default")(audit.ProgressEvent{Kind: "task_finished", Task: capheruntime.TaskResult{
+				Uses: "scanner.grype", Status: capheruntime.StatusSkipped, Error: reason,
+			}})
+			got := output.String()
+			if !strings.Contains(got, "grype db update") || !strings.Contains(got, "grype db delete") || strings.Contains(got, "setup --install") {
+				t.Fatalf("incorrect database recovery guidance: %s", got)
+			}
+		})
+	}
+	if got := scannerFailureSuggestion(capheruntime.TaskResult{Uses: "scanner.grype", Error: "grype unavailable"}); !strings.Contains(got, "setup --install") {
+		t.Fatalf("missing Grype should suggest installation: %s", got)
+	}
+}

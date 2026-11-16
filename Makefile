@@ -1,13 +1,13 @@
 .PHONY: build install uninstall install-tools tools-install test test-e2e test-e2e-real vet check demo
 
-CAPHE_CACHE ?= $(HOME)/.cache/caphe
+CAPHE_CACHE ?= $(if $(XDG_CACHE_HOME),$(XDG_CACHE_HOME),$(HOME)/.cache)/caphe
 CAPHE_BIN ?= $(CAPHE_CACHE)/bin
 TOOLS ?= poutine,actionlint,syft,grype,gitleaks,llama.cpp
 
 build:
 	go build -o bin/caphe ./cmd/caphe
 
-install: build
+install: build install-tools
 	@mkdir -p "$(CAPHE_BIN)" "$(CAPHE_CACHE)/libexec"
 	install -m 0755 bin/caphe "$(CAPHE_BIN)/caphe"
 	install -m 0755 scripts/install-tools.sh "$(CAPHE_CACHE)/libexec/install-tools.sh"

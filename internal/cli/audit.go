@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/andrew-ships-stuff/caphe/internal/audit"
+	capheruntime "github.com/andrew-ships-stuff/caphe/internal/runtime"
 	"github.com/spf13/cobra"
 )
 
@@ -111,7 +112,7 @@ func (a *app) auditProgress(target, workflow string) audit.ProgressFunc {
 				}
 			case "skipped":
 				fmt.Fprintf(a.stdout, "○ %s skipped — %s\n", label, progressReason(event.Task.Error, event.Task.ErrorClass))
-				if suggestion := scannerInstallSuggestion(event.Task.Uses); suggestion != "" {
+				if suggestion := scannerFailureSuggestion(event.Task); suggestion != "" {
 					fmt.Fprintf(a.stdout, "  Fix: %s\n", suggestion)
 				}
 			default:
@@ -142,6 +143,14 @@ func (a *app) auditProgress(target, workflow string) audit.ProgressFunc {
 			fmt.Fprintf(a.stdout, "✓ Built deterministic remediation plan — %d %s from %d %s\n\n", event.GroupCount, plural(event.GroupCount, "group", "groups"), event.FindingCount, plural(event.FindingCount, "finding", "findings"))
 		}
 	}
+}
+
+func scannerFailureSuggestion(task capheruntime.TaskResult) string {
+	reason := strings.ToLower(task.Error)
+	if task.Uses == "scanner.grype" && (strings.Contains(reason, "failed to load vulnerability db") || strings.Contains(reason, "current database is invalid")) {
+		return "run the managed grype db update; for persistent corruption, run grype db delete then grype db update; repeated migration failures may require an upstream fix"
+	}
+	return scannerInstallSuggestion(task.Uses)
 }
 
 func auditTaskLabel(uses string) string {

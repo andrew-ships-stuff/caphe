@@ -100,7 +100,8 @@ func (l *LlamaCPP) GenerateStructured(ctx context.Context, r Request) (Result, e
 	}
 	var out struct {
 		Choices []struct {
-			Message struct {
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
@@ -116,9 +117,12 @@ func (l *LlamaCPP) GenerateStructured(ctx context.Context, r Request) (Result, e
 	if len(out.Choices) != 1 {
 		return Result{}, fmt.Errorf("expected one completion")
 	}
+	if out.Choices[0].FinishReason == "length" {
+		return Result{}, fmt.Errorf("model output truncated at token limit (%d completion tokens; maximum %d); increase --max-output-tokens within the configured budget", out.Usage.Completion, r.MaxOutputTokens)
+	}
 	raw := json.RawMessage(out.Choices[0].Message.Content)
 	if !json.Valid(raw) {
-		return Result{}, fmt.Errorf("model returned invalid JSON")
+		return Result{}, fmt.Errorf("model returned invalid JSON (%d completion tokens; maximum %d)", out.Usage.Completion, r.MaxOutputTokens)
 	}
 	return Result{Output: raw, Model: out.Model, PromptTokens: out.Usage.Prompt, CompletionTokens: out.Usage.Completion, Duration: time.Since(start)}, nil
 }
