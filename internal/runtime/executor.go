@@ -42,6 +42,15 @@ type TaskResult struct {
 	FindingCount   int        `json:"findingCount"`
 	ToolVersion    string     `json:"toolVersion,omitempty"`
 }
+
+type TaskEvent struct {
+	Task   compiler.PlanTask
+	Result TaskResult
+	Done   bool
+}
+
+type ProgressFunc func(TaskEvent)
+
 type Manifest struct {
 	ExecutionID    string       `json:"executionId"`
 	WorkflowDigest string       `json:"workflowDigest"`
@@ -55,6 +64,7 @@ type Executor struct {
 	artifacts   *artifacts.Store
 	db          *storage.Store
 	concurrency int
+	progress    ProgressFunc
 }
 
 func New(reg *adapters.Registry, as *artifacts.Store, db *storage.Store, concurrency int) *Executor {
@@ -62,6 +72,17 @@ func New(reg *adapters.Registry, as *artifacts.Store, db *storage.Store, concurr
 		concurrency = 1
 	}
 	return &Executor{registry: reg, artifacts: as, db: db, concurrency: concurrency}
+}
+
+func (e *Executor) WithProgress(progress ProgressFunc) *Executor {
+	e.progress = progress
+	return e
+}
+
+func (e *Executor) report(event TaskEvent) {
+	if e.progress != nil {
+		e.progress(event)
+	}
 }
 
 func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) (Manifest, error) {
@@ -121,6 +142,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 				states[t.ID] = r
 				remaining--
 				_ = e.db.SaveTask(ctx, id, t.ID, string(r.Status), 0, "", r.ErrorClass, r.Error, 0)
+				e.report(TaskEvent{Task: t, Result: r, Done: true})
 			} else if depsDone {
 				ready = append(ready, t)
 			}
@@ -146,6 +168,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 				r := states[t.ID]
 				r.Status = StatusRunning
 				states[t.ID] = r
+				e.report(TaskEvent{Task: t, Result: r})
 				inputs := map[string]string{}
 				for _, n := range t.Needs {
 					if p := artPaths[n]; p != "" {
@@ -162,6 +185,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 				}
 				allFindings = append(allFindings, fs...)
 				mu.Unlock()
+				e.report(TaskEvent{Task: t, Result: result, Done: true})
 			}()
 		}
 		wg.Wait()

@@ -10,20 +10,33 @@
 [![Go](https://img.shields.io/github/go-mod/go-version/andrew-ships-stuff/caphe?logo=go)](https://github.com/andrew-ships-stuff/caphe/blob/main/go.mod)
 [![License: MIT](https://img.shields.io/github/license/andrew-ships-stuff/caphe)](https://github.com/andrew-ships-stuff/caphe/blob/main/LICENSE)
 
-Caphe is a local-first, CPU-native security workflow compiler and executor. It compiles declarative YAML into a content-addressed lock artifact, executes a fixed DAG without model-directed control flow, runs installed security scanners through typed adapters, preserves their raw output, and stores normalized evidence in SQLite.
+Caphe is an evidence-first security audit CLI and self-hosted service. It compiles declarative YAML into a content-addressed workflow lock, executes a fixed DAG of installed security scanners, preserves their raw output, normalizes and correlates findings in SQLite, and emits digest-pinned JSON, SARIF, Markdown, and HTML reports with a deterministic remediation plan.
 
-The deterministic engine does not require an LLM, GPU, Kubernetes, Docker, API key, or database server. Optional inference is designed around a loopback-only external `llama.cpp` server and schema-bounded security hypotheses; model output is never promoted directly to a confirmed vulnerability.
+Security scanners—not an LLM—produce Caphe's potential vulnerability findings. Caphe groups their evidence, surfaces available package fix versions, and generates copyable fix prompts. Optional CPU inference can review scanner results using a small, digest-verified model served by `llama.cpp` on loopback. Model-written explanations, priorities, and deduplication suggestions remain clearly labeled, unverified `hypothesis` output and never control execution or policy.
+
+Caphe runs locally without an LLM, GPU, Docker, Kubernetes, API key, or database server. The same deterministic audit engine can also run behind Caphe's authenticated cluster API using Docker Compose or Helm. Cluster workers currently perform scanner-only audits; optional inference is available in the local CLI and GitHub review flows.
+
+## Quick start
+
+```bash
+brew install andrew-ships-stuff/tap/caphe
+caphe setup
+caphe audit .
+```
+
+`caphe setup` is the first-run command: it initializes local state, lets you choose scanners and bounded CPU inference, and offers to install every missing checksum-pinned tool needed by that selection. Caphe automatically discovers its managed tool directory; no shell `PATH` edit is required. Run `caphe setup --install` later to repair a partial installation, or `caphe doctor` to inspect exactly what is available. Missing optional scanners still degrade to explicit `skipped` tasks; Caphe never fabricates replacement findings.
 
 ## Current working scope
 
-- Go CLI: `version`, `doctor`, `init`, hardware inspection, tool discovery, workflow validation/compilation/lock validation, scan/run, findings, graph queries, reports, and AI status/recommendation.
+- Go CLI: `version`, `doctor`, `init`, hardware inspection, tool discovery, workflow validation/compilation/lock validation, scan/run/audit, cluster service and workers, findings, graph queries, reports, and optional AI analysis.
 - Real installed-tool adapters for Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. No production mock fallback exists.
 - Canonical workflow locks with adapter pinning, bounded timeout/retry policy, security/syntax gate records, and SHA-256 digests.
 - Dependency-aware concurrent executor with partial failure, cancellation, raw artifact retention, and execution manifests.
 - SQLite findings/evidence store and content-addressed artifact files.
-- Native JSON, SARIF 2.1.0, and self-contained HTML reporting: dark dashboard with per-tool cards, global and per-column filters, paginated findings (25/50/100/ALL), CSV export, a deterministic deduplicated remediation plan (package@version → fix versions with tallied advisories and NVD/GitHub/OSV/Opengrep-registry links), per-line copyable agent fix prompts, and a copy-all button that falls back to grep-against-the-file instructions when the prompt set is too large to paste.
+- Native JSON, SARIF 2.1.0, and self-contained HTML reporting: dark dashboard with per-tool cards (tasks merged into their scanner identity), global and per-column filters, paginated findings in a sortable-free clean table (25/50/100/ALL), CSV export, a deterministic deduplicated remediation plan (package@version → fix versions, repeated rule+location occurrences collapsed, tallied advisories with NVD/GitHub/OSV/Opengrep-registry links), per-line copyable agent fix prompts, a copy-all button that falls back to grep-against-the-file instructions when the prompt set is too large to paste, and optional local-LLM dedup **hypothesis** suggestions (never auto-merged; deterministic grouping is authoritative).
 - CPU/memory/disk inspection and conservative, explicitly unvalidated model recommendations.
-- A Go inference interface and loopback-only `llama.cpp` HTTP provider. Managed runtime/model downloads are not implemented yet.
+- A loopback-only `llama.cpp` provider. `caphe audit --ai --ai-serve` downloads a digest-verified model, launches a private CPU inference subprocess on an ephemeral loopback port, enforces call/token/time budgets, and stops it after the audit.
+- An authenticated cluster API with bounded archive or immutable-Git submissions, renewable worker leases, Docker Compose packaging, and a Helm chart. The current queue uses shared filesystem storage and does not yet claim OIDC, object storage, or exactly-once execution.
 
 See [docs/roadmap.md](docs/roadmap.md) for the exact boundary between implemented and planned functionality.
 
@@ -47,15 +60,15 @@ caphe tools doctor
 
 Caphe never silently substitutes generated findings when a scanner is missing. On macOS, Linux, and Windows, install scanner releases from their respective upstream projects: Opengrep, Anchore Syft, Anchore Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Pin versions in CI and preserve the execution manifest that records detected versions.
 
-For an easily removable local toolchain, Caphe can install checksum-verified Poutine and actionlint releases into its own cache:
+For an easily removable local toolchain, Caphe can install every checksum-pinned default-audit tool into its own cache. Both target names work; use `TOOLS=` to install only a subset:
 
 ```bash
-make tools-install
-export PATH="${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin:$PATH"
+make install-tools
+make tools-install TOOLS=syft,grype,gitleaks
 caphe tools doctor
 ```
 
-Set `CAPHE_CACHE` or pass `scripts/install-tools.sh --bin-dir PATH` to choose another location. Removing that dedicated directory removes the managed binaries. Caphe does not install system packages or request elevated privileges.
+The default managed set is Poutine, Syft, Grype, Gitleaks, `llama.cpp`, and the repository companion actionlint. Set `CAPHE_CACHE` or pass `scripts/install-tools.sh --bin-dir PATH` to choose another location. Removing that dedicated directory removes the managed binaries. Caphe does not install system packages or request elevated privileges.
 
 Homebrew users can install commonly used tools independently:
 
@@ -67,16 +80,49 @@ brew install poutine syft grype gitleaks opa osv-scanner checkov kubescape actio
 
 ## Homebrew installation
 
-Until a versioned tap is published, build the current checkout with the included HEAD formula:
+Install the current checksum-pinned release from the public tap:
 
 ```bash
-brew install --HEAD --formula ./packaging/homebrew/caphe.rb
+brew install andrew-ships-stuff/tap/caphe
 caphe version
 ```
 
-The intended release command will be `brew install andrew-ships-stuff/tap/caphe` after the tap and signed release artifacts exist. This repository does not claim that unpublished command works today.
+The formula installs the Caphe binary from the published release artifacts. It does not install scanner executables or an inference model without a separate, explicit user action. Source-checkout users can still build the HEAD formula with `brew install --HEAD --formula ./packaging/homebrew/caphe.rb`.
 
-Release installation scripts are provided in `scripts/` and require an explicit version. They verify release checksums and install to a user directory. No stable release endpoint is claimed yet, and neither script provisions scanners or inference without a separate user action.
+## What an audit shows
+
+Human-readable audits narrate the real workflow as it runs. Tasks may complete in a different order when scanners run concurrently:
+
+```text
+$ caphe audit .
+Caphe audit
+  Target    .
+  Workflow  caphe:default (fixed DAG)
+
+→ Running SAST scan with Opengrep...
+→ Running SBOM inventory with Syft...
+○ secret scan with Gitleaks skipped — gitleaks unavailable
+  Fix: run caphe setup --install; or install only this scanner with brew install gitleaks
+✓ SAST scan with Opengrep done — 12 findings · 1.4s
+✓ SBOM inventory with Syft done — 0 findings · 2.1s
+✓ Deterministically normalized and correlated 18 scanner findings
+→ Using Qwen2.5-1.5B-Instruct-Q4_K_M.gguf to interpret 18 findings as unverified hypotheses...
+✓ Model proposed 3 repository priorities (hypothesis · unverified)
+✓ Built deterministic remediation plan — 9 groups from 18 findings
+```
+
+Interactive audits enable the pinned, bounded CPU model by default and report how many schema-valid hypotheses, repository priorities, and possible duplicate-group proposals they accepted. Use `--ai=false` for scanner-only execution. Non-interactive and `--json` audits remain deterministic-only unless AI is explicitly enabled or saved through `caphe setup`; `--json` always suppresses the human narrative so stdout stays machine-readable.
+
+## Self-hosted service
+
+`caphe cluster` exposes the same scanner-driven audit engine through an authenticated API and horizontally scalable workers. Development deployments are included for Docker Compose and Kubernetes:
+
+```bash
+docker compose -f deployments/docker/compose.yaml up --build --scale worker=3
+helm upgrade --install caphe deployments/helm/caphe --set auth.existingSecret=caphe-auth
+```
+
+See [docs/cluster.md](docs/cluster.md) for authentication, storage, network isolation, submission, and current scalability boundaries. Cluster workers intentionally disable inference today; adding service-side CPU inference requires server-owned model, digest, and budget policy.
 
 ## Five-minute local demo
 
@@ -106,6 +152,8 @@ caphe init --project .
 
 This creates `.poutine.yml` and `.github/dependabot.yml` when absent. Existing files are reported and never overwritten. Use `--no-project-config` when only local Caphe state should be initialized.
 
+This `init` command is optional and is not required before `audit`; `caphe setup` already initializes the local database and artifact directories. `init --project` exists specifically for adding the repository configuration files above.
+
 ## End-to-end tests
 
 The primary integration path builds the real CLI, compiles and validates a workflow, runs a controllable scanner process, persists findings to SQLite, and validates SARIF output:
@@ -117,8 +165,7 @@ make test-e2e
 The real-tool path scans this repository with Poutine through Caphe's compiled executor:
 
 ```bash
-make tools-install
-export PATH="${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin:$PATH"
+make install-tools
 make test-e2e-real
 ```
 
@@ -174,7 +221,7 @@ OPA queries should return a boolean, string, or collection of objects. Object re
 
 ## Terminal and automation output
 
-Caphe commands are human-readable by default. Diagnostics, scanner coverage, workflow execution, findings, validation, and AI status use aligned sections with `✓`, `✗`, `!`, and `○` status marks. Long-running audits and workflow runs show a spinner only when stdout is an interactive terminal; redirected output never receives terminal control sequences.
+Caphe commands are human-readable by default. Diagnostics, scanner coverage, workflow execution, findings, validation, and AI status use aligned sections with `✓`, `✗`, `!`, and `○` status marks. Audits narrate real scanner, remediation, and inference stages as they happen; other long-running workflow commands use a spinner only in an interactive terminal. Redirected output never receives terminal control sequences.
 
 Pass the global `--json` flag anywhere in the command to retain stable machine-readable output:
 

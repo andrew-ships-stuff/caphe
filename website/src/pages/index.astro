@@ -50,7 +50,7 @@ const integrations = [
   </section>
 
   <section class="architecture-section section">
-    <div class="section-heading centered"><span>02 / System</span><h2>One evidence trail, end to end.</h2><p>The current implementation compiles and runs local workflows. Optional inference is bounded; richer verification and distributed workers remain roadmap work.</p></div>
+    <div class="section-heading centered"><span>02 / System</span><h2>One evidence trail, end to end.</h2><p>The current implementation compiles and runs local workflows, offers bounded CPU inference, and serves whole audits through authenticated distributed workers. Richer independent verification remains roadmap work.</p></div>
     <ArchitectureDiagram />
   </section>
 
@@ -87,7 +87,7 @@ const integrations = [
     <div class="hardware-panel">
       <div><span class="kicker">05 / Hardware independence</span><h2>Local-first. CPU-conscious. Useful with AI switched off.</h2><p>Hardware inspection and conservative model recommendations use available memory—not aspirational specs. Recommendations are explicitly unvalidated until measured against a model, context size, concurrency, and task.</p><a class="text-link" href={href('/docs/cpu-inference/')}>Understand CPU inference <ArrowRight size={16}/></a></div>
       <div class="environments" aria-label="Deployment status">
-        <div><strong>macOS</strong><span class="available">Build target</span></div><div><strong>Linux</strong><span class="available">Build target</span></div><div><strong>Windows</strong><span class="available">Build target</span></div><div><strong>Docker</strong><span class="available">Dockerfile</span></div><div><strong>Kubernetes</strong><span class="planned">Planned</span></div><div><strong>GPU</strong><span class="neutral">Not required</span></div>
+        <div><strong>macOS</strong><span class="available">Build target</span></div><div><strong>Linux</strong><span class="available">Build target</span></div><div><strong>Windows</strong><span class="available">Build target</span></div><div><strong>Docker</strong><span class="available">Compose</span></div><div><strong>Kubernetes</strong><span class="available">Helm</span></div><div><strong>GPU</strong><span class="neutral">Not required</span></div>
       </div>
     </div>
   </section>

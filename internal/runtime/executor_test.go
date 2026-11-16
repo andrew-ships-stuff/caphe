@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/andrew-ships-stuff/caphe/internal/adapters"
@@ -53,7 +54,13 @@ spec: {target: {type: repository}, tasks: [{id: scan, uses: scanner.fixed}]}
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := New(reg, artifacts.New(filepath.Join(dir, "artifacts")), db, 2).Run(t.Context(), p, dir)
+	var events []TaskEvent
+	var eventsMu sync.Mutex
+	m, err := New(reg, artifacts.New(filepath.Join(dir, "artifacts")), db, 2).WithProgress(func(event TaskEvent) {
+		eventsMu.Lock()
+		defer eventsMu.Unlock()
+		events = append(events, event)
+	}).Run(t.Context(), p, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +69,9 @@ spec: {target: {type: repository}, tasks: [{id: scan, uses: scanner.fixed}]}
 	}
 	if m.Tasks[0].Uses != "scanner.fixed" {
 		t.Fatalf("task uses = %q, want scanner.fixed", m.Tasks[0].Uses)
+	}
+	if len(events) != 2 || events[0].Done || !events[1].Done || events[1].Result.FindingCount != 1 {
+		t.Fatalf("unexpected progress events: %#v", events)
 	}
 	got, err := db.ListFindings(t.Context())
 	if err != nil || len(got) != 1 {
