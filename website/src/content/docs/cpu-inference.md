@@ -56,6 +56,8 @@ The command requires a finding, model identifier, and verified content digest. T
 
 ## Structured contract
 
+Audit finding reviews request one short sentence each for explanation and remediation. A server-reported output token limit is rejected as truncation, with token usage in the error. Try `caphe audit . --max-output-tokens 512` when an audit hits the limit (maximum 1024). Caphe does not automatically increase budgets or retry calls. A rejected review keeps the deterministic recommendation, while the separate repository synthesis may still succeed.
+
 The model must return exactly one object containing an allowlisted invariant type, property, subjects, required evidence, an allowlisted verification strategy, and literal `confidence: hypothesis`. Unknown fields, trailing JSON, invalid values, and extra prose are rejected.
 
 Implicit interactive inference degrades cleanly when the runtime is missing and leaves the deterministic bundle intact. Explicit required inference reports an error when provisioning fails. Invalid individual model responses are rejected and recorded without changing scanner evidence. The model never controls the executor.

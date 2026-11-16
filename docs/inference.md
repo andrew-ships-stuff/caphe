@@ -1,5 +1,7 @@
 # CPU-only inference
 
+Audit finding reviews request compact, one-sentence explanation and remediation fields. If the server reports that generation reached its token limit, Caphe rejects the completion and reports truncation with token usage, rather than a generic JSON error. For an audit that hits this limit, try `caphe audit . --max-output-tokens 512` (maximum 1024). Budgets are not increased automatically and calls are not retried. Invalid reviews retain the deterministic recommendation; a separate repository synthesis can still succeed. All accepted model output remains an unverified hypothesis.
+
 Inference is optional but AI-first in the interactive audit experience. An interactive `caphe audit` uses the pinned CPU model by default when the runtime is available; `--ai=false` selects scanner-only execution. Non-interactive and JSON audits do not enable inference implicitly unless that preference was saved by `caphe setup`. Setup offers to install the checksum-pinned `llama.cpp` runtime and Caphe automatically discovers its managed tool directory. Caphe exposes hardware inspection, conservative model recommendations, a loopback-only `llama.cpp` HTTP provider, and strict schema validation.
 
 ```bash

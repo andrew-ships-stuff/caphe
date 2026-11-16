@@ -24,6 +24,8 @@ Caphe publishes checksum-pinned release binaries through its Homebrew tap. A sou
 
    For a source build, clone the repository and run `go build -o caphe ./cmd/caphe` with Go 1.26 or newer.
 
+   On macOS or Linux, `make install` builds and installs Caphe and calls `install-tools` for the checksum-pinned managed set: Poutine, actionlint, Syft, Grype, Gitleaks, and `llama.cpp`. Opengrep requires a separate installation. The default destination is `${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin`; add it to `PATH` to invoke Caphe. Override `CAPHE_CACHE` for another cache location or `TOOLS=syft,grype` for a subset. Use `make build` to build without downloading tools.
+
 2. **Complete first-run setup**
 
    ```bash
@@ -83,6 +85,7 @@ Use the complete command printed by `caphe doctor` to enable `audit --ai --ai-se
 | Symptom | Check |
 | --- | --- |
 | `scanner executable not found` | Run `caphe setup --install`, then `caphe tools doctor`. |
+| Grype database is stale or fails to load | Run the managed `grype db update`. For persistent corruption, run `grype db delete` then `grype db update` (requires network). Repeated hydration/migration errors may need an upstream fix and a reviewed pin update; reinstalling Caphe does not repair the database. |
 | Lock validation fails | Recompile after changing the workflow or adapter contract. Locks are tamper-evident. |
 | A required task is skipped | Inspect the execution manifest for a failed dependency. Optional dependencies must be declared in both `needs` and `optionalNeeds`. |
 | Inference server unavailable | Confirm `llama-server` is listening on `localhost`, `127.0.0.1`, or `::1`. Remote endpoints are rejected. |
