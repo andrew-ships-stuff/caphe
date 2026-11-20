@@ -118,6 +118,7 @@ func (a *app) clusterServeCmd() *cobra.Command {
 }
 
 func (a *app) clusterWorkerCmd() *cobra.Command {
+	ai := audit.AIOptions{Enabled: true, Model: dogfoodModelName, ModelDigest: dogfoodModelDigest, ModelURL: dogfoodModelURL, MaxCalls: 6, MaxInputTokens: 4096, MaxOutputTokens: 512, MaxTotalTime: 10 * time.Minute, Offline: true}
 	var root, workerID string
 	var concurrency, taskConcurrency int
 	var maxFiles int64
@@ -125,6 +126,9 @@ func (a *app) clusterWorkerCmd() *cobra.Command {
 	var maxOutput, maxExpanded int64
 	var networkEnforced bool
 	command := &cobra.Command{Use: "worker", Short: "Run one or more cluster worker slots", RunE: func(cmd *cobra.Command, _ []string) error {
+		if !cmd.Flags().Changed("ai-model-cache") {
+			ai.ModelCache = filepath.Join(a.dataDir, "models")
+		}
 		if concurrency <= 0 || taskConcurrency <= 0 || poll <= 0 || leaseTimeout <= 0 || maxOutput <= 0 {
 			return fmt.Errorf("worker concurrency, durations, and limits must be positive")
 		}
@@ -136,13 +140,21 @@ func (a *app) clusterWorkerCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		worker, err := cluster.NewWorker(cluster.WorkerConfig{ID: workerID, Store: store, Registry: a.registry, Concurrency: concurrency, TaskConcurrency: taskConcurrency, PollInterval: poll, LeaseTimeout: leaseTimeout, MaxOutputBytes: maxOutput, ArchiveLimits: archiveLimits, CapheVersion: Version, NetworkEnforced: networkEnforced, Log: a.stderr})
+		worker, err := cluster.NewWorker(cluster.WorkerConfig{AI: ai, ID: workerID, Store: store, Registry: a.registry, Concurrency: concurrency, TaskConcurrency: taskConcurrency, PollInterval: poll, LeaseTimeout: leaseTimeout, MaxOutputBytes: maxOutput, ArchiveLimits: archiveLimits, CapheVersion: Version, NetworkEnforced: networkEnforced, Log: a.stderr})
 		if err != nil {
 			return err
 		}
 		return worker.Run(cmd.Context())
 	}}
 	command.Flags().StringVar(&root, "root", filepath.Join(a.dataDir, "cluster"), "shared cluster state directory")
+	command.Flags().BoolVar(&ai.Enabled, "ai", true, "enable worker-owned CPU inference using a pre-provisioned model")
+	command.Flags().StringVar(&ai.ModelCache, "ai-model-cache", filepath.Join(a.dataDir, "models"), "pre-provisioned digest-verified model cache (workers never download models)")
+	command.Flags().IntVar(&ai.Threads, "ai-threads", 0, "CPU threads for the shared worker runtime (0 selects physical cores within GOMAXPROCS)")
+	command.Flags().IntVar(&ai.Parallel, "ai-parallel", 2, "shared runtime inference slots; model weights are loaded once per worker")
+	command.Flags().StringVar(&ai.Model, "ai-model", dogfoodModelName, "operator-selected model identifier")
+	command.Flags().StringVar(&ai.ModelDigest, "ai-model-digest", dogfoodModelDigest, "required digest of pre-provisioned model weights")
+	command.Flags().IntVar(&ai.MaxCalls, "max-model-calls", 12, "maximum inference calls per job (1-20)")
+	command.Flags().DurationVar(&ai.MaxTotalTime, "max-inference-time", 10*time.Minute, "maximum inference time per job")
 	command.Flags().StringVar(&workerID, "worker-id", "", "stable worker identifier (generated when empty)")
 	command.Flags().IntVar(&concurrency, "concurrency", 1, "concurrent jobs in this process")
 	command.Flags().IntVar(&taskConcurrency, "task-concurrency", 1, "scanner tasks per job")

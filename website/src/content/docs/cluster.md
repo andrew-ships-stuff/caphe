@@ -24,10 +24,12 @@ Git branches and tags are not accepted as refs. The control plane host-allowlist
 - Only server-registered compiled workflow digests can run.
 - Upload, expanded-size, file-count, CPU, memory, duration, concurrency, and output limits are bounded.
 - Raw scanner artifacts use temporary job-local storage. Persisted finding properties are redacted before the bundle digest is recomputed.
-- Clients cannot enable AI. Any future cluster inference policy remains server-owned, loopback-only, digest-verified, bounded, and labeled hypothesis.
+- CPU inference is enabled by default under worker-owned configuration. One private runtime shares verified model weights across jobs. Clients cannot choose models or inference policy. All model output remains an unverified hypothesis.
 - Remote clients require HTTPS. Plain HTTP is accepted only on loopback.
 
 Docker Compose and Helm packaging are included under `deployments/`. The Helm worker has default-deny ingress and egress and no Kubernetes service-account token.
+
+The cluster image includes default model weights at `/opt/caphe/models`; workers verify them without network access. Host workers use `--ai-model-cache` to select pre-provisioned weights, or `--ai=false` to disable inference. Use `--ai-threads` and `--ai-parallel` to tune the shared runtime. Audit bundles distinguish failed scanners from unavailable tools and report incomplete coverage independently of finding counts.
 
 :::caution
 The first release uses a shared-volume filesystem queue and at-least-once leases. It does not yet provide a Kubernetes custom resource, OIDC, object storage, task-level fan-out, or exactly-once execution.

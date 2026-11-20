@@ -58,6 +58,8 @@ func TestMain(m *testing.M) {
 	if os.Getenv("CAPHE_FAKE_LLAMA") == "1" {
 		port := os.Getenv("CAPHE_FAKE_LLAMA_PORT")
 		mux := http.NewServeMux()
+		mux.HandleFunc("/apply-template", func(w http.ResponseWriter, r *http.Request) { fakeTokenization(w, r) })
+		mux.HandleFunc("/tokenize", func(w http.ResponseWriter, r *http.Request) { fakeTokenization(w, r) })
 		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(`{"status":"ok"}`)) })
 		mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

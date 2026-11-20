@@ -32,4 +32,4 @@ mkdir -p "$install_dir"
 install -m 0755 "$tmp_dir/caphe" "$install_dir/caphe"
 "$install_dir/caphe" version
 echo "Installed Caphe to $install_dir/caphe"
-echo "Run 'caphe tools doctor' to inspect optional scanners. CPU inference is not installed automatically."
+echo "The release binary includes the pinned CPU runtime. Run 'caphe setup --install' to provision scanners and verified model weights. Audits enable inference by default."

@@ -114,6 +114,11 @@ func (a *app) setupCmd() *cobra.Command {
 			if err := a.installManagedTools(cmd.Context(), requested); err != nil {
 				return err
 			}
+			if aiEnabled {
+				if _, err := inference.EnsureModel(cmd.Context(), filepath.Join(a.dataDir, "models"), dogfoodModelURL, dogfoodModelDigest); err != nil {
+					return err
+				}
+			}
 		}
 		workflowDir := filepath.Join(a.dataDir, "workflows")
 		if err := os.MkdirAll(workflowDir, 0o700); err != nil {
@@ -300,7 +305,11 @@ func (a *app) printSetupResult(cmd *cobra.Command, ids []string, settings userSe
 		fmt.Fprintf(a.stdout, "\nRun caphe doctor for installation guidance for: %s\n", strings.Join(missingExternal, ", "))
 	}
 	if settings.AIEnabled {
-		fmt.Fprintf(a.stdout, "\nInstall the pinned CPU runtime if needed:\n  make tools-install TOOLS=llama.cpp\n")
+		if _, err := inference.ResolveLlamaServer(""); err == nil {
+			fmt.Fprintln(a.stdout, "\n✓ Local CPU runtime available; audit manages its lifecycle automatically")
+		} else {
+			fmt.Fprintln(a.stdout, "\nInstall the pinned CPU runtime with make tools-install TOOLS=llama.cpp, or build the bundled binary with make build-release")
+		}
 	}
 	fmt.Fprintln(a.stdout, "\nRun: caphe audit .")
 	return nil

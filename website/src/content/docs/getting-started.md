@@ -70,7 +70,7 @@ caphe --data-dir .caphe-ci audit . --json
 
 ## Optional CPU inference
 
-Inference is not required for scanning. Interactive audits enable the pinned CPU model by default when the runtime is available; use `caphe audit . --ai=false` for scanner-only execution. Caphe can connect to an already-running compatible `llama.cpp` server on loopback or download the digest-verified default model and launch a private CPU server for one audit.
+Inference is not required for scanning. Audits enable it by default, including JSON and non-interactive execution; use `caphe audit . --ai=false` for scanner-only execution. Release binaries embed the native CPU runtime. Setup with installation provisions verified model weights; Caphe manages the private runtime process automatically.
 
 ```bash
 caphe hardware inspect --json

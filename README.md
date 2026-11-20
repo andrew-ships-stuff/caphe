@@ -14,7 +14,7 @@ Caphe is an evidence-first security audit CLI and self-hosted service. It compil
 
 Security scanners—not an LLM—produce Caphe's potential vulnerability findings. Caphe groups their evidence, surfaces available package fix versions, and generates copyable fix prompts. Optional CPU inference can review scanner results using a small, digest-verified model served by `llama.cpp` on loopback. Model-written explanations, priorities, and deduplication suggestions remain clearly labeled, unverified `hypothesis` output and never control execution or policy.
 
-Caphe runs locally without an LLM, GPU, Docker, Kubernetes, API key, or database server. The same deterministic audit engine can also run behind Caphe's authenticated cluster API using Docker Compose or Helm. Cluster workers currently perform scanner-only audits; optional inference is available in the local CLI and GitHub review flows.
+Caphe runs locally without a GPU, Docker, Kubernetes, API key, or database server. Release binaries embed the checksum-pinned native CPU runtime. Audits enable local inference by default, including JSON and non-interactive execution; `--ai=false` selects scanner-only execution. The same audit engine runs behind the authenticated cluster API, with one operator-controlled model runtime shared by each worker's concurrent jobs.
 
 ## Quick start
 
@@ -25,6 +25,12 @@ caphe audit .
 ```
 
 `caphe setup` is the first-run command: it initializes local state, lets you choose scanners and bounded CPU inference, and offers to install every missing checksum-pinned tool needed by that selection. Caphe automatically discovers its managed tool directory; no shell `PATH` edit is required. Run `caphe setup --install` later to repair a partial installation, or `caphe doctor` to inspect exactly what is available. Missing optional scanners still degrade to explicit `skipped` tasks; Caphe never fabricates replacement findings.
+
+Setup with installation also downloads and verifies the pinned model weights. Weights are cached separately from the executable. Inference runs in an automatically managed, private loopback subprocess with GPU layers disabled. `--ai-threads` controls its CPU threads and `--ai-parallel` controls concurrent requests sharing those weights. More slots consume additional context memory and do not guarantee better throughput on a memory-bandwidth-limited CPU.
+
+Audit bundles include scanner coverage, deterministic remediation groups, and AI reviewed/unreviewed counts. Missing scanners and failed scanners are distinguished; either produces an `incomplete` audit, while available evidence is retained. Gitleaks scans current directory contents, including uncommitted files, rather than Git history. Findings indicate scanner observations in the snapshot, not independently proven exploitability. Adapter identity changes require recompiling old workflow locks and regenerating comparison baselines.
+
+For a source checkout, `make build` produces the lightweight development binary; `make build-release` embeds the verified native runtime for the current platform. `make install` uses that bundled build. Published releases embed a platform-specific runtime for macOS, Linux, and Windows on amd64 and arm64.
 
 ## Current working scope
 
@@ -114,7 +120,7 @@ Caphe audit
 ✓ Built deterministic remediation plan — 9 groups from 18 findings
 ```
 
-Interactive audits enable the pinned, bounded CPU model by default and report how many schema-valid hypotheses, repository priorities, and possible duplicate-group proposals they accepted. Use `--ai=false` for scanner-only execution. Non-interactive and `--json` audits remain deterministic-only unless AI is explicitly enabled or saved through `caphe setup`; `--json` always suppresses the human narrative so stdout stays machine-readable.
+Audits enable the pinned, bounded CPU model by default and report accepted hypotheses, repository priorities, possible duplicate-group proposals, and unreviewed findings. Use `--ai=false` or a saved setup preference for scanner-only execution. This default also applies to non-interactive and `--json` audits; `--json` suppresses the human narrative so stdout stays machine-readable.
 
 ## Self-hosted service
 

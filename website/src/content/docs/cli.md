@@ -41,7 +41,7 @@ caphe setup [--tools LIST] [--ai=false] [--install]
 
 The tool commands include Opengrep, Syft, Grype, Gitleaks, Poutine, OPA, OSV-Scanner, Checkov, and Kubescape. Detection does not install a tool or silently replace a missing executable.
 
-Interactive output uses aligned sections and status marks: `✓` succeeded or available, `✗` failed or missing, `!` a finding that needs attention, and `○` skipped, optional, or inactive. `audit` narrates each real scanner and core task with completion status, finding counts, and duration, and prints an actionable install command when a scanner is unavailable. Interactive audits use the pinned, bounded CPU model by default; pass `--ai=false` for scanner-only execution. Deterministic remediation and model-hypothesis stages follow. Concurrent tasks can complete in a different order. Add `--json` to suppress the narrative and retain stable machine-readable stdout for automation.
+Interactive output uses aligned sections and status marks: `✓` succeeded or available, `✗` failed or missing, `!` a finding that needs attention, and `○` skipped, optional, or inactive. `audit` narrates each real scanner and core task with completion status, finding counts, and duration. All audits enable bounded CPU inference by default unless disabled by setup preferences; pass `--ai=false` for scanner-only execution. Release binaries embed the native runtime. Concurrent reviews share one loaded model, and bundles report scanner coverage plus AI reviewed/unreviewed counts. Add `--json` to suppress the narrative and retain machine-readable stdout; it does not disable inference.
 
 ## Findings, graph, and reports
 

@@ -5,7 +5,7 @@ description: The implemented loopback llama.cpp boundary, model recommendations,
 
 import { Aside } from '@astrojs/starlight/components';
 
-Caphe's deterministic engine is fully useful without a model, but interactive audits are AI-first: they attempt the pinned CPU model by default and fall back cleanly when the runtime is unavailable. Pass `--ai=false` for scanner-only execution. Inference runs through a private loopback `llama.cpp` server.
+Audits enable the pinned CPU model by default, including JSON and non-interactive execution, unless a saved preference disables it. Pass `--ai=false` for scanner-only execution. Release binaries embed the verified native runtime; model weights are cached separately. Caphe automatically manages a private loopback `llama.cpp` subprocess with GPU offload disabled.
 
 ## What exists today
 
@@ -17,9 +17,11 @@ Caphe's deterministic engine is fully useful without a model, but interactive au
 - Cache keys over model digest, prompt/schema versions, canonical context, and configuration.
 - Storage of valid output only as a `hypothesized` evidence node.
 
-`caphe audit --ai-serve` downloads the explicitly identified model, verifies its required SHA-256 digest, caches it, launches the pinned or explicitly selected runtime on an ephemeral loopback port, and stops it after the audit. `caphe setup` provisions the checksum-pinned runtime from Homebrew or a source checkout. General-purpose model install/remove commands, inference queueing, and persistent benchmark data are not implemented.
+`caphe audit --ai-serve` downloads the explicitly identified model, verifies its SHA-256 digest, caches it, launches the runtime on an ephemeral loopback port, and stops it after the audit. `caphe setup --install` provisions the default weights ahead of time. `make build-release` embeds the platform runtime in source builds. This packaging still uses a native subprocess and private listener, not an in-process Go model engine.
 
-Run `caphe setup` to choose the default scanner workflow and whether bounded CPU inference is enabled. Setup offers to install the pinned `llama.cpp` runtime, and `caphe setup --install` repairs it later. Interactive audits enable it by default even before setup; non-interactive and JSON audits require an explicit or saved preference.
+Run `caphe setup` to choose the default scanners and inference preference. Defaults are 12 model calls, 4096 input tokens, 512 output tokens, and ten minutes including model preparation. Actual chat-template tokens are counted before generation. A bounded Go worker pool reviews findings concurrently; two inference slots share one loaded model. Bundle metadata reports reviewed/unreviewed findings and dedup-group coverage.
+
+Use `--ai-threads` to control CPU threads and `--ai-parallel` for inference slots (up to 16). Default threads use physical cores bounded by Go's effective CPU allocation. Additional slots need context memory and may reduce throughput when CPU memory bandwidth is saturated. Cluster workers share one runtime across jobs and require cached, verified model weights; job submissions cannot choose inference policy.
 
 ## Inspect and recommend
 
@@ -60,4 +62,4 @@ Audit finding reviews request one short sentence each for explanation and remedi
 
 The model must return exactly one object containing an allowlisted invariant type, property, subjects, required evidence, an allowlisted verification strategy, and literal `confidence: hypothesis`. Unknown fields, trailing JSON, invalid values, and extra prose are rejected.
 
-Implicit interactive inference degrades cleanly when the runtime is missing and leaves the deterministic bundle intact. Explicit required inference reports an error when provisioning fails. Invalid individual model responses are rejected and recorded without changing scanner evidence. The model never controls the executor.
+Default inference degrades cleanly when preparation fails and leaves the deterministic bundle intact with an explicit AI error. Explicit `--ai` reports an error when provisioning fails. Invalid model responses are rejected and recorded without changing scanner evidence. The model never controls the executor.

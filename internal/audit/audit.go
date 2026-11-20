@@ -40,6 +40,9 @@ type AIOptions struct {
 	ModelURL        string
 	LlamaServer     string
 	Threads         int
+	Parallel        int
+	ModelCache      string
+	Offline         bool
 	MaxCalls        int
 	MaxInputTokens  int
 	MaxOutputTokens int
@@ -91,6 +94,7 @@ type Recommendation struct {
 }
 
 type Synthesis struct {
+	Status        string     `json:"status"`
 	RiskSummary   string     `json:"riskSummary"`
 	Priorities    []Priority `json:"priorities"`
 	ModelDigest   string     `json:"modelDigest,omitempty"`
@@ -124,31 +128,41 @@ type Metrics struct {
 }
 
 type AIInfo struct {
-	Enabled     bool     `json:"enabled"`
-	Model       string   `json:"model,omitempty"`
-	ModelDigest string   `json:"modelDigest,omitempty"`
-	Endpoint    string   `json:"endpoint,omitempty"`
-	Calls       int      `json:"calls"`
-	Errors      []string `json:"errors,omitempty"`
+	Status              string   `json:"status,omitempty"`
+	PromptTokens        int      `json:"promptTokens"`
+	CompletionTokens    int      `json:"completionTokens"`
+	DurationMillis      int64    `json:"durationMillis"`
+	DedupGroupsReviewed int      `json:"dedupGroupsReviewed"`
+	ReviewedFindings    int      `json:"reviewedFindings"`
+	UnreviewedFindings  int      `json:"unreviewedFindings"`
+	Enabled             bool     `json:"enabled"`
+	Model               string   `json:"model,omitempty"`
+	ModelDigest         string   `json:"modelDigest,omitempty"`
+	Endpoint            string   `json:"endpoint,omitempty"`
+	Calls               int      `json:"calls"`
+	Errors              []string `json:"errors,omitempty"`
 }
 
 type Bundle struct {
-	SchemaVersion   string                    `json:"schemaVersion"`
-	GeneratedAt     time.Time                 `json:"generatedAt"`
-	CapheVersion    string                    `json:"capheVersion"`
-	Target          string                    `json:"target"`
-	Workflow        string                    `json:"workflow"`
-	WorkflowDigest  string                    `json:"workflowDigest"`
-	ExecutionID     string                    `json:"executionId"`
-	Status          string                    `json:"status"`
-	Tasks           []capheruntime.TaskResult `json:"tasks"`
-	Metrics         Metrics                   `json:"metrics"`
-	Findings        []findings.Finding        `json:"findings"`
-	Recommendations []Recommendation          `json:"recommendations,omitempty"`
-	Dedup           []DedupSuggestion         `json:"dedup,omitempty"`
-	Synthesis       *Synthesis                `json:"synthesis,omitempty"`
-	AI              AIInfo                    `json:"ai"`
-	Digest          string                    `json:"digest"`
+	Coverage         Coverage                  `json:"coverage"`
+	Groups           []RemediationGroup        `json:"groups"`
+	ObservationScope string                    `json:"observationScope"`
+	SchemaVersion    string                    `json:"schemaVersion"`
+	GeneratedAt      time.Time                 `json:"generatedAt"`
+	CapheVersion     string                    `json:"capheVersion"`
+	Target           string                    `json:"target"`
+	Workflow         string                    `json:"workflow"`
+	WorkflowDigest   string                    `json:"workflowDigest"`
+	ExecutionID      string                    `json:"executionId"`
+	Status           string                    `json:"status"`
+	Tasks            []capheruntime.TaskResult `json:"tasks"`
+	Metrics          Metrics                   `json:"metrics"`
+	Findings         []findings.Finding        `json:"findings"`
+	Recommendations  []Recommendation          `json:"recommendations,omitempty"`
+	Dedup            []DedupSuggestion         `json:"dedup,omitempty"`
+	Synthesis        *Synthesis                `json:"synthesis,omitempty"`
+	AI               AIInfo                    `json:"ai"`
+	Digest           string                    `json:"digest"`
 }
 
 var severityRank = map[findings.Severity]int{findings.SeverityCritical: 5, findings.SeverityHigh: 4, findings.SeverityMedium: 3, findings.SeverityLow: 2, findings.SeverityInfo: 1, findings.SeverityUnknown: 0}
@@ -166,12 +180,12 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 		options.Registry = adapters.DefaultRegistry()
 	}
 	if options.Concurrency <= 0 {
-		options.Concurrency = runtime.NumCPU()
+		options.Concurrency = runtime.GOMAXPROCS(0)
 	}
 	if options.DataDir == "" {
 		return Bundle{}, fmt.Errorf("data directory is required")
 	}
-	if err := validateAIOptions(options.AI); err != nil {
+	if err := ValidateAIOptions(options.AI); err != nil {
 		return Bundle{}, err
 	}
 	prepared, err := source.PrepareWithLimits(options.Target, options.SourceLimits)
@@ -216,6 +230,8 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 		return Bundle{}, err
 	}
 	bundle := Bundle{SchemaVersion: SchemaVersion, GeneratedAt: time.Now().UTC(), CapheVersion: options.CapheVersion, Target: options.Target, Workflow: options.Workflow, WorkflowDigest: manifest.WorkflowDigest, ExecutionID: manifest.ExecutionID, Status: manifest.Status, Tasks: manifest.Tasks, Findings: items, Metrics: Metrics{BySeverity: map[string]int{}, ByTool: map[string]int{}}}
+	bundle.Coverage = scanCoverage(manifest.Tasks)
+	bundle.ObservationScope = "scanner observations in the current snapshot; exploitability is not verified"
 	for _, item := range items {
 		bundle.Metrics.Findings++
 		bundle.Metrics.BySeverity[string(item.Severity)]++
@@ -239,6 +255,7 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 		}
 	}
 	groups, _ := buildRemediation(&bundle)
+	bundle.Groups = groups
 	reportProgress(options, ProgressEvent{Kind: "remediation_ready", FindingCount: len(bundle.Findings), GroupCount: len(groups)})
 	if err := setDigest(&bundle); err != nil {
 		return Bundle{}, err
@@ -246,17 +263,17 @@ func Run(ctx context.Context, options Options) (Bundle, error) {
 	return bundle, nil
 }
 
-func validateAIOptions(ai AIOptions) error {
+func ValidateAIOptions(ai AIOptions) error {
 	if !ai.Enabled {
 		return nil
 	}
 	if ai.Model == "" || ai.ModelDigest == "" {
 		return fmt.Errorf("--ai-model and --ai-model-digest are required with --ai")
 	}
-	if ai.Serve && ai.ModelURL == "" {
+	if ai.Serve && !ai.Offline && ai.ModelURL == "" {
 		return fmt.Errorf("--ai-model-url is required with --ai-serve")
 	}
-	if ai.MaxCalls <= 0 || ai.MaxCalls > 20 || ai.MaxInputTokens <= 0 || ai.MaxInputTokens > 8192 || ai.MaxOutputTokens <= 0 || ai.MaxOutputTokens > 1024 || ai.MaxTotalTime <= 0 || ai.MaxTotalTime > 30*time.Minute {
+	if ai.Parallel < 0 || ai.Parallel > 16 || ai.Threads < 0 || ai.MaxCalls <= 0 || ai.MaxCalls > 20 || ai.MaxInputTokens <= 0 || ai.MaxInputTokens > 8192 || ai.MaxOutputTokens <= 0 || ai.MaxOutputTokens > 1024 || ai.MaxTotalTime <= 0 || ai.MaxTotalTime > 30*time.Minute {
 		return fmt.Errorf("invalid AI budget")
 	}
 	return nil
@@ -274,7 +291,17 @@ func locationSuffix(finding findings.Finding) string {
 
 func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 	ai := &options.AI
+	ctx, cancel := context.WithTimeout(ctx, ai.MaxTotalTime)
+	defer cancel()
 	bundle.AI = AIInfo{Enabled: true, Model: ai.Model, ModelDigest: ai.ModelDigest, Endpoint: ai.Endpoint}
+	started := time.Now()
+	defer func() { bundle.AI.DurationMillis = time.Since(started).Milliseconds() }()
+	bundle.AI.UnreviewedFindings = len(bundle.Findings)
+	if len(bundle.Findings) == 0 {
+		bundle.AI.Status = "no_evidence"
+		reportProgress(options, ProgressEvent{Kind: "ai_no_evidence", Model: ai.Model})
+		return nil
+	}
 	endpoint := ai.Endpoint
 	if ai.Serve {
 		bundle.AI.Endpoint = "ephemeral-loopback"
@@ -282,11 +309,21 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 		if _, err := inference.ResolveLlamaServer(ai.LlamaServer); err != nil {
 			return unavailableAI(bundle, options, err)
 		}
-		modelPath, err := inference.EnsureModel(ctx, filepath.Join(options.DataDir, "models"), ai.ModelURL, ai.ModelDigest)
+		cache := ai.ModelCache
+		if cache == "" {
+			cache = filepath.Join(options.DataDir, "models")
+		}
+		var modelPath string
+		var err error
+		if ai.Offline {
+			modelPath, err = inference.CachedModel(cache, ai.ModelDigest)
+		} else {
+			modelPath, err = inference.EnsureModel(ctx, cache, ai.ModelURL, ai.ModelDigest)
+		}
 		if err != nil {
 			return unavailableAI(bundle, options, err)
 		}
-		server, err := inference.StartServer(ctx, inference.ServerOptions{Binary: ai.LlamaServer, ModelPath: modelPath, Threads: ai.Threads})
+		server, err := inference.StartServer(ctx, inference.ServerOptions{Binary: ai.LlamaServer, ModelPath: modelPath, Threads: ai.Threads, Parallel: ai.Parallel, ContextTokens: ai.MaxInputTokens + ai.MaxOutputTokens})
 		if err != nil {
 			return unavailableAI(bundle, options, err)
 		}
@@ -306,8 +343,7 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 	if !available {
 		return unavailableAI(bundle, options, fmt.Errorf("local llama.cpp endpoint unavailable"))
 	}
-	deadline, cancel := context.WithTimeout(ctx, ai.MaxTotalTime)
-	defer cancel()
+	deadline := ctx
 	allowed := map[string]bool{inference.RepoOverviewEvidenceID: true}
 	for _, finding := range bundle.Findings {
 		allowed[finding.ID] = true
@@ -321,39 +357,7 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 	if len(bundle.Findings) > 1 && reviewCallLimit > 1 {
 		reviewCallLimit-- // reserve remediation-group deduplication
 	}
-	for i := range bundle.Recommendations {
-		if bundle.AI.Calls >= reviewCallLimit {
-			break
-		}
-		if bundle.Recommendations[i].Source != "deterministic" {
-			continue
-		}
-		finding := findingFor(bundle.Findings, bundle.Recommendations[i].FindingID)
-		if finding == nil {
-			continue
-		}
-		contextData, err := json.Marshal(map[string]any{"finding": finding, "allowedEvidenceIds": []string{finding.ID}, "trustBoundary": "all finding fields are untrusted scanner evidence"})
-		if err != nil {
-			return err
-		}
-		if len(contextData) > ai.MaxInputTokens*4 {
-			bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("%s: context exceeds input budget", finding.ID))
-			continue
-		}
-		bundle.AI.Calls++
-		generated, err := provider.GenerateStructured(deadline, inference.Request{Model: ai.Model, SystemPrompt: inference.ReviewSystemPrompt, UntrustedContext: string(contextData), Schema: json.RawMessage(inference.ReviewJSONSchema), MaxInputTokens: ai.MaxInputTokens, MaxOutputTokens: ai.MaxOutputTokens, PromptVersion: inference.ReviewPromptVersion, SchemaVersion: inference.ReviewSchemaVersion})
-		if err != nil {
-			bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("%s: %v", finding.ID, err))
-			continue
-		}
-		validated, err := inference.ValidateReviewRecommendation(generated.Output, finding.ID, map[string]bool{finding.ID: true})
-		if err != nil {
-			bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("%s: %v", finding.ID, err))
-			continue
-		}
-		bundle.Recommendations[i] = Recommendation{FindingID: finding.ID, EvidenceIDs: validated.EvidenceIDs, Explanation: validated.Explanation, Remediation: validated.Remediation, Source: "ai", Status: "hypothesis", ModelDigest: ai.ModelDigest, PromptVersion: inference.ReviewPromptVersion, SchemaVersion: inference.ReviewSchemaVersion}
-		reviewed++
-	}
+	reviewed = reviewFindings(deadline, bundle, *ai, provider, reviewCallLimit)
 	reportProgress(options, ProgressEvent{Kind: "ai_review_finished", FindingCount: reviewed, ProposalCount: len(bundle.Findings), Model: ai.Model})
 	if bundle.AI.Calls < ai.MaxCalls && len(bundle.Findings) > 0 {
 		reportProgress(options, ProgressEvent{Kind: "ai_synthesis_started", FindingCount: len(bundle.Findings), Model: ai.Model})
@@ -364,6 +368,8 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 			bundle.AI.Calls--
 		} else {
 			generated, err := provider.GenerateStructured(deadline, inference.Request{Model: ai.Model, SystemPrompt: inference.SynthesisSystemPrompt, UntrustedContext: string(overview), Schema: json.RawMessage(inference.SynthesisJSONSchema), MaxInputTokens: ai.MaxInputTokens, MaxOutputTokens: ai.MaxOutputTokens, PromptVersion: inference.SynthesisPromptVersion, SchemaVersion: inference.SynthesisSchemaVersion})
+			bundle.AI.PromptTokens += generated.PromptTokens
+			bundle.AI.CompletionTokens += generated.CompletionTokens
 			if err != nil {
 				bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("synthesis: %v", err))
 			} else {
@@ -371,7 +377,7 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 				if err != nil {
 					bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("synthesis: %v", err))
 				} else {
-					synthesis := &Synthesis{RiskSummary: validated.RiskSummary, ModelDigest: ai.ModelDigest, PromptVersion: inference.SynthesisPromptVersion, SchemaVersion: inference.SynthesisSchemaVersion}
+					synthesis := &Synthesis{Status: "hypothesis", RiskSummary: validated.RiskSummary, ModelDigest: ai.ModelDigest, PromptVersion: inference.SynthesisPromptVersion, SchemaVersion: inference.SynthesisSchemaVersion}
 					for _, priority := range validated.Priorities {
 						synthesis.Priorities = append(synthesis.Priorities, Priority{Title: priority.Title, Rationale: priority.Rationale, EvidenceIDs: priority.EvidenceIDs, Rank: priority.Rank})
 					}
@@ -385,39 +391,52 @@ func attachAI(ctx context.Context, bundle *Bundle, options Options) error {
 		groups, _ := buildRemediation(bundle)
 		if len(groups) >= 2 {
 			reportProgress(options, ProgressEvent{Kind: "ai_dedup_started", GroupCount: len(groups), Model: ai.Model})
-			overview, err := dedupContext(bundle, groups)
-			if err != nil {
-				bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
-			} else if len(overview) > ai.MaxInputTokens*4 {
-				bundle.AI.Errors = append(bundle.AI.Errors, "dedup: context exceeds input budget")
-			} else {
-				bundle.AI.Calls++
-				generated, err := provider.GenerateStructured(deadline, inference.Request{Model: ai.Model, SystemPrompt: inference.DedupSystemPrompt, UntrustedContext: string(overview), Schema: json.RawMessage(inference.DedupJSONSchema), MaxInputTokens: ai.MaxInputTokens, MaxOutputTokens: ai.MaxOutputTokens, PromptVersion: inference.DedupPromptVersion, SchemaVersion: inference.DedupSchemaVersion})
+			for start := 0; start < len(groups)-1 && bundle.AI.Calls < ai.MaxCalls; start += 8 {
+				batch := groups[start:min(start+8, len(groups))]
+				overview, err := dedupContext(bundle, batch)
 				if err != nil {
 					bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
+				} else if len(overview) > ai.MaxInputTokens*4 {
+					bundle.AI.Errors = append(bundle.AI.Errors, "dedup: context exceeds input budget")
 				} else {
-					allowed := map[string]bool{}
-					for _, group := range groups {
-						allowed[group.ID] = true
-					}
-					suggestions, err := inference.ValidateDedupSuggestions(generated.Output, allowed)
+					bundle.AI.Calls++
+					generated, err := provider.GenerateStructured(deadline, inference.Request{Model: ai.Model, SystemPrompt: inference.DedupSystemPrompt, UntrustedContext: string(overview), Schema: json.RawMessage(inference.DedupJSONSchema), MaxInputTokens: ai.MaxInputTokens, MaxOutputTokens: ai.MaxOutputTokens, PromptVersion: inference.DedupPromptVersion, SchemaVersion: inference.DedupSchemaVersion})
+					bundle.AI.PromptTokens += generated.PromptTokens
+					bundle.AI.CompletionTokens += generated.CompletionTokens
 					if err != nil {
 						bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
 					} else {
-						for _, merge := range suggestions.Merges {
-							bundle.Dedup = append(bundle.Dedup, DedupSuggestion{GroupID: merge.GroupID, DuplicateOf: merge.DuplicateOf, Rationale: merge.Rationale, Source: "ai", Status: "hypothesis", ModelDigest: ai.ModelDigest, PromptVersion: inference.DedupPromptVersion, SchemaVersion: inference.DedupSchemaVersion})
+						allowed := map[string]bool{}
+						for _, group := range batch {
+							allowed[group.ID] = true
+						}
+						suggestions, err := inference.ValidateDedupSuggestions(generated.Output, allowed)
+						if err != nil {
+							bundle.AI.Errors = append(bundle.AI.Errors, fmt.Sprintf("dedup: %v", err))
+						} else {
+							bundle.AI.DedupGroupsReviewed += len(batch)
+							for _, merge := range suggestions.Merges {
+								bundle.Dedup = append(bundle.Dedup, DedupSuggestion{GroupID: merge.GroupID, DuplicateOf: merge.DuplicateOf, Rationale: merge.Rationale, Source: "ai", Status: "hypothesis", ModelDigest: ai.ModelDigest, PromptVersion: inference.DedupPromptVersion, SchemaVersion: inference.DedupSchemaVersion})
+							}
 						}
 					}
 				}
 			}
-			reportProgress(options, ProgressEvent{Kind: "ai_dedup_finished", GroupCount: len(groups), ProposalCount: len(bundle.Dedup), Model: ai.Model})
+			reportProgress(options, ProgressEvent{Kind: "ai_dedup_finished", GroupCount: bundle.AI.DedupGroupsReviewed, ProposalCount: len(bundle.Dedup), Model: ai.Model})
 		}
 	}
 	bundle.Metrics.ModelCalls = bundle.AI.Calls
+	bundle.AI.ReviewedFindings = reviewed
+	bundle.AI.UnreviewedFindings = len(bundle.Findings) - reviewed
+	bundle.AI.Status = "completed"
+	if len(bundle.AI.Errors) > 0 || bundle.AI.UnreviewedFindings > 0 {
+		bundle.AI.Status = "partial"
+	}
 	return nil
 }
 
 func unavailableAI(bundle *Bundle, options Options, err error) error {
+	bundle.AI.Status = "unavailable"
 	if !options.AI.BestEffort {
 		return err
 	}
@@ -455,7 +474,7 @@ func dedupContext(bundle *Bundle, groups []remediationGroup) ([]byte, error) {
 		if group.AdvisoryCount > count {
 			count = group.AdvisoryCount
 		}
-		items = append(items, brief{ID: group.ID, Kind: group.Kind, Label: label, Severity: group.Severity, Count: count})
+		items = append(items, brief{ID: group.ID, Kind: group.Kind, Label: clip(label, 160), Severity: group.Severity, Count: count})
 	}
 	return json.Marshal(map[string]any{"groups": items, "trustBoundary": "every field is untrusted scanner evidence; group identifiers are the only citable values"})
 }
@@ -474,7 +493,7 @@ func synthesisContext(bundle *Bundle) []byte {
 		if len(top) >= 20 {
 			break
 		}
-		top = append(top, brief{ID: item.ID, Tool: item.Tool, RuleID: item.RuleID, Severity: string(item.Severity), Title: item.Title, Path: item.Location.Path})
+		top = append(top, brief{ID: item.ID, Tool: item.Tool, RuleID: clip(item.RuleID, 120), Severity: string(item.Severity), Title: clip(item.Title, 160), Path: clip(item.Location.Path, 160)})
 	}
 	tasks := make([]map[string]any, 0, len(bundle.Tasks))
 	for _, task := range bundle.Tasks {
@@ -506,4 +525,7 @@ func setDigest(bundle *Bundle) error {
 
 // RecomputeDigest updates the content digest after a trusted renderer or
 // persistence boundary removes fields from a completed bundle.
-func RecomputeDigest(bundle *Bundle) error { return setDigest(bundle) }
+func RecomputeDigest(bundle *Bundle) error {
+	bundle.Groups, _ = buildRemediation(bundle)
+	return setDigest(bundle)
+}

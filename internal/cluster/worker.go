@@ -14,10 +14,12 @@ import (
 	"github.com/andrew-ships-stuff/caphe/internal/adapters"
 	"github.com/andrew-ships-stuff/caphe/internal/audit"
 	"github.com/andrew-ships-stuff/caphe/internal/compiler"
+	"github.com/andrew-ships-stuff/caphe/internal/inference"
 	"github.com/andrew-ships-stuff/caphe/internal/source"
 )
 
 type WorkerConfig struct {
+	AI              audit.AIOptions
 	ID              string
 	Store           *Store
 	Registry        *adapters.Registry
@@ -35,6 +37,9 @@ type WorkerConfig struct {
 type Worker struct{ config WorkerConfig }
 
 func NewWorker(config WorkerConfig) (*Worker, error) {
+	if err := audit.ValidateAIOptions(config.AI); err != nil {
+		return nil, err
+	}
 	if config.Store == nil {
 		return nil, fmt.Errorf("cluster store is required")
 	}
@@ -73,6 +78,20 @@ func NewWorker(config WorkerConfig) (*Worker, error) {
 }
 
 func (w *Worker) Run(ctx context.Context) error {
+	if w.config.AI.Enabled {
+		ai := &w.config.AI
+		model, err := inference.CachedModel(ai.ModelCache, ai.ModelDigest)
+		if err != nil {
+			return err
+		}
+		server, err := inference.StartServer(ctx, inference.ServerOptions{Binary: ai.LlamaServer, ModelPath: model, Threads: ai.Threads, Parallel: ai.Parallel, ContextTokens: ai.MaxInputTokens + ai.MaxOutputTokens})
+		if err != nil {
+			return err
+		}
+		defer server.Stop()
+		ai.Serve = false
+		ai.Endpoint = server.Endpoint
+	}
 	if err := w.config.Store.RequeueStale(w.config.LeaseTimeout); err != nil {
 		return err
 	}
@@ -92,6 +111,9 @@ func (w *Worker) loop(ctx context.Context, workerID string) {
 	ticker := time.NewTicker(w.config.PollInterval)
 	defer ticker.Stop()
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		lease, job, err := w.config.Store.Claim(workerID)
 		if err == nil {
 			w.execute(ctx, lease, job)
@@ -132,6 +154,7 @@ func (w *Worker) execute(parent context.Context, lease Lease, job Job) {
 	}
 	defer os.RemoveAll(stateDir)
 	bundle, err := audit.Run(ctx, audit.Options{
+		AI:           w.config.AI,
 		Target:       filepath.Join(w.config.Store.JobDir(job.ID), "source.zip"),
 		Workflow:     job.Submission.WorkflowDigest,
 		DataDir:      stateDir,

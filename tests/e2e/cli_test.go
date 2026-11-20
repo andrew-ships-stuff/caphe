@@ -253,7 +253,7 @@ printf '%s\n' '{"runs":[{"results":[{"ruleId":"untrusted-checkout-exec","level":
 	markdownPath := filepath.Join(temp, "bundle.md")
 	htmlPath := filepath.Join(temp, "bundle.html")
 	env := append(os.Environ(), "PATH="+toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	out := run(t, temp, env, binary, "audit", target, "-o", bundlePath, "--sarif-output", sarifPath, "--markdown-output", markdownPath, "--html-output", htmlPath, "--data-dir", filepath.Join(temp, "state"), "--json")
+	out := run(t, temp, env, binary, "audit", target, "--ai=false", "-o", bundlePath, "--sarif-output", sarifPath, "--markdown-output", markdownPath, "--html-output", htmlPath, "--data-dir", filepath.Join(temp, "state"), "--json")
 	if !strings.Contains(out, `"findings": 5`) || !strings.Contains(out, "sha256:") {
 		t.Fatalf("audit summary missing aggregate metrics: %s", out)
 	}
@@ -308,7 +308,7 @@ printf '%s\n' '{"runs":[{"results":[{"ruleId":"untrusted-checkout-exec","level":
 		t.Fatalf("bundle-to-HTML report missing: %v", err)
 	}
 	degraded := run(t, target, []string{"PATH=/usr/bin:/bin", "CAPHE_TOOL_BIN=" + filepath.Join(temp, "missing-managed-tools")}, binary, "audit", "-o", filepath.Join(temp, "degraded.json"), "--sarif-output", "", "--markdown-output", "", "--html-output", "", "--data-dir", filepath.Join(temp, "degraded-state"), "--json")
-	if !strings.Contains(degraded, `"status": "succeeded"`) || !strings.Contains(degraded, `"findings": 0`) {
+	if !strings.Contains(degraded, `"status": "incomplete"`) || !strings.Contains(degraded, `"findings": 0`) {
 		t.Fatalf("audit must succeed with all scanners missing: %s", degraded)
 	}
 	aiState := filepath.Join(temp, "ai-state")

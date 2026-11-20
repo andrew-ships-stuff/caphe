@@ -72,6 +72,7 @@ jobs:
           ARCHIVE_FORMAT: ${{ matrix.format }}
         run: |
           mkdir -p dist/package
+          env -u GOOS -u GOARCH go run ./scripts/embed-runtime -target "$GOOS/$GOARCH"
           binary=caphe
           if [[ "$GOOS" == windows ]]; then binary=caphe.exe; fi
           ldflags='-s -w'
@@ -85,7 +86,7 @@ jobs:
             release_version=${CAPHE_PACKAGE_VERSION#v}
             ldflags="$ldflags -X github.com/andrew-ships-stuff/caphe/internal/cli.Version=$release_version"
           fi
-          go build -trimpath -ldflags="$ldflags" -o "dist/package/$binary" ./cmd/caphe
+          go build -tags bundled -trimpath -ldflags="$ldflags" -o "dist/package/$binary" ./cmd/caphe
           cp LICENSE README.md dist/package/
           archive="caphe_${CAPHE_PACKAGE_VERSION}_${GOOS}_${GOARCH}"
           if [[ "$ARCHIVE_FORMAT" == zip ]]; then

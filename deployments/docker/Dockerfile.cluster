@@ -1,20 +1,23 @@
-FROM golang:1.26-alpine AS build
+FROM golang:1.26 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/caphe ./cmd/caphe
+RUN go run ./scripts/embed-runtime && CGO_ENABLED=0 go build -tags bundled -trimpath -ldflags='-s -w' -o /out/caphe ./cmd/caphe
+RUN --mount=type=cache,target=/var/cache/caphe-model /out/caphe setup --non-interactive --tools none --install --data-dir /var/cache/caphe-model && cp -a /var/cache/caphe-model/models /out/models
 
 FROM alpine:3.22 AS tools
 RUN apk add --no-cache bash ca-certificates curl tar
 COPY scripts/install-tools.sh /tmp/install-tools.sh
 RUN bash /tmp/install-tools.sh --bin-dir /opt/caphe/bin --tools poutine,syft,grype,gitleaks
 
-FROM alpine:3.22
-RUN apk add --no-cache ca-certificates git && addgroup -g 65532 caphe && adduser -D -H -u 65532 -G caphe caphe && mkdir -p /var/lib/caphe/cluster && chown -R caphe:caphe /var/lib/caphe
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git libgomp1 libstdc++6 && groupadd -g 65532 caphe && useradd -u 65532 -g caphe caphe && mkdir -p /var/lib/caphe/cluster && chown -R caphe:caphe /var/lib/caphe
 COPY --from=build /out/caphe /usr/local/bin/caphe
+COPY --from=build --chown=65532:65532 /out/models/ /opt/caphe/models/
 COPY --from=tools /opt/caphe/bin/ /opt/caphe/bin/
 ENV PATH="/opt/caphe/bin:${PATH}"
+ENV CAPHE_TOOL_BIN="/tmp/caphe-runtime"
 USER 65532:65532
 VOLUME ["/var/lib/caphe/cluster"]
 ENTRYPOINT ["/usr/local/bin/caphe"]

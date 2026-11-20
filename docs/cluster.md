@@ -16,7 +16,9 @@ The service enforces exactly one source, full 40- or 64-character Git commit IDs
 
 Git acquisition occurs in the control plane with a minimal environment and no credential-bearing URL. The resolved commit must exactly match the submitted SHA. The checkout is converted into a bounded ZIP snapshot before enqueueing, so workers never need Git or network access. Submodules are not fetched.
 
-Workers use job-local temporary SQLite and raw artifact storage, persist only redacted normalized bundles and derived reports, and then delete temporary state. AI execution is disabled in the cluster worker path. Adding it later requires server-owned model, digest, loopback, and budget policy; clients will not control it.
+Workers use job-local temporary SQLite and raw artifact storage, persist only redacted normalized bundles and derived reports, and then delete temporary state. CPU inference is enabled by default and owned by the worker operator. One private runtime shares its loaded weights across concurrent jobs. Workers verify a pre-provisioned model in `--ai-model-cache` and never download weights. Missing or invalid weights prevent an AI-enabled worker from starting. Use `--ai=false` to run without inference. Model text remains a hypothesis and cannot control scanner execution or policy.
+
+The cluster image includes the embedded runtime and default model weights. Compose and Helm select `/opt/caphe/models`. For host workers, run `caphe setup --install` first or provide a cache containing `<sha256 hex>.gguf`. Operators can set `--ai-model`, `--ai-model-digest`, `--ai-threads`, `--ai-parallel`, `--max-model-calls`, and `--max-inference-time`. Clients cannot set these options. Allocate memory for scanner processes, one model, and one context per inference slot; job CPU/memory requests still do not create per-job OS resource isolation.
 
 ## CLI roles
 

@@ -10,6 +10,17 @@ import (
 	"github.com/andrew-ships-stuff/caphe/internal/findings"
 )
 
+func TestCrossScannerAdvisoryAliasesPreserveEvidence(t *testing.T) {
+	bundle := Bundle{Findings: []findings.Finding{
+		{ID: "grype", Tool: "scanner.grype", RuleID: "CVE-2026-1", Severity: findings.SeverityHigh, Properties: map[string]any{"artifact": map[string]any{"name": "example.org/lib", "version": "1.0", "type": "go-module"}, "vulnerability": map[string]any{"id": "CVE-2026-1"}}},
+		{ID: "osv", Tool: "scanner.osv", RuleID: "GHSA-aaaa-bbbb-cccc", Severity: findings.SeverityHigh, Properties: map[string]any{"package": map[string]any{"name": "example.org/lib", "version": "1.0", "ecosystem": "Go"}, "vulnerability": map[string]any{"id": "GHSA-aaaa-bbbb-cccc", "aliases": []any{"CVE-2026-1"}}}},
+	}}
+	groups, _ := buildRemediation(&bundle)
+	if len(groups) != 1 || len(groups[0].FindingIDs) != 2 || groups[0].AdvisoryCount != 1 {
+		t.Fatalf("lost evidence or failed alias grouping: %+v", groups)
+	}
+}
+
 func grypeFinding(id, name, version, advisory string, fixed []string) findings.Finding {
 	return findings.Finding{
 		ID: id, Tool: "scanner.grype", RuleID: advisory, Title: advisory + " affects " + name + "@" + version,
