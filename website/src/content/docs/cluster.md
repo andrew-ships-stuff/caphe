@@ -18,6 +18,8 @@ caphe cluster download job-... --output caphe-audit.json
 
 Git branches and tags are not accepted as refs. The control plane host-allowlists Git origins, verifies the resolved commit, and turns the checkout into a bounded archive. Workers therefore need no Git credentials or network access.
 
+ZIP uploads unwrap a single visible wrapper directory but preserve hidden repository directories such as `.github/`, including snapshots containing only workflows.
+
 ## Security boundary
 
 - Bearer tokens map to tenants; status and result downloads are tenant-scoped.

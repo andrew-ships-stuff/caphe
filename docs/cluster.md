@@ -12,7 +12,7 @@ caphe cluster submit \
   [--network disabled|restricted] [--wait]
 ```
 
-The service enforces exactly one source, full 40- or 64-character Git commit IDs, pre-registered compiled workflow digests, Git host allowlists, compressed and expanded archive limits, file-count limits, resource admission ceilings, job timeouts, worker concurrency, report-size limits, tenant-scoped artifact access, and retention. Clients cannot upload scanner commands or AI settings.
+The service enforces exactly one source, full 40- or 64-character Git commit IDs, pre-registered compiled workflow digests, Git host allowlists, compressed and expanded archive limits, file-count limits, resource admission ceilings, job timeouts, worker concurrency, report-size limits, tenant-scoped artifact access, and retention. Clients cannot upload scanner commands or AI settings. ZIPs with a single visible wrapper directory are unwrapped; hidden repository directories such as `.github/` are preserved so workflow-only snapshots remain scannable.
 
 Git acquisition occurs in the control plane with a minimal environment and no credential-bearing URL. The resolved commit must exactly match the submitted SHA. The checkout is converted into a bounded ZIP snapshot before enqueueing, so workers never need Git or network access. Submodules are not fetched.
 
