@@ -48,7 +48,7 @@ See [docs/roadmap.md](docs/roadmap.md) for the exact boundary between implemente
 
 ## Build
 
-Requirements: Go 1.26 or newer for this development snapshot.
+Requirements: Go 1.27 or newer for this development snapshot.
 
 ```bash
 go build -o caphe ./cmd/caphe

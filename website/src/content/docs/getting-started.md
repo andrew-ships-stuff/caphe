@@ -9,7 +9,7 @@ Caphe publishes checksum-pinned release binaries through its Homebrew tap. A sou
 
 ## Requirements
 
-- Homebrew for the shortest install, or Go 1.26+ for a source build.
+- Homebrew for the shortest install, or Go 1.27+ for a source build.
 - Only the scanner executables referenced by your selected workflow. The included local demo needs [Opengrep](https://github.com/opengrep/opengrep) and [Syft](https://github.com/anchore/syft).
 - No GPU, LLM API key, Docker, Kubernetes, or database server is required.
 
@@ -22,7 +22,7 @@ Caphe publishes checksum-pinned release binaries through its Homebrew tap. A sou
    caphe version
    ```
 
-   For a source build, clone the repository and run `go build -o caphe ./cmd/caphe` with Go 1.26 or newer.
+   For a source build, clone the repository and run `go build -o caphe ./cmd/caphe` with Go 1.27 or newer.
 
    On macOS or Linux, `make install` builds and installs Caphe and calls `install-tools` for the checksum-pinned managed set: Poutine, actionlint, Syft, Grype, Gitleaks, and `llama.cpp`. Opengrep requires a separate installation. The default destination is `${XDG_CACHE_HOME:-$HOME/.cache}/caphe/bin`; add it to `PATH` to invoke Caphe. Override `CAPHE_CACHE` for another cache location or `TOOLS=syft,grype` for a subset. Use `make build` to build without downloading tools.
 

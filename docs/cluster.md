@@ -20,6 +20,8 @@ Workers use job-local temporary SQLite and raw artifact storage, persist only re
 
 The cluster image includes the embedded runtime and default model weights. Compose and Helm select `/opt/caphe/models`. For host workers, run `caphe setup --install` first or provide a cache containing `<sha256 hex>.gguf`. Operators can set `--ai-model`, `--ai-model-digest`, `--ai-threads`, `--ai-parallel`, `--max-model-calls`, and `--max-inference-time`. Clients cannot set these options. Allocate memory for scanner processes, one model, and one context per inference slot; job CPU/memory requests still do not create per-job OS resource isolation.
 
+Images pre-extract the embedded native runtime into `/opt/caphe/runtime`, with ownership for the non-root worker. Runtime bytes are checked against the embedded archive before use. This supports a read-only root filesystem without executing anything from the temporary scan workspace. The model download uses a Docker build cache and verifies its digest on reuse.
+
 ## CLI roles
 
 Start a development control plane on loopback and register the bundled workflow:
