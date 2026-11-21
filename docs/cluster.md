@@ -67,7 +67,7 @@ caphe cluster download job-... --output caphe-audit.json
 
 The client permits plaintext HTTP only for loopback endpoints so bearer tokens are not sent over remote cleartext connections. A reverse proxy or ingress must terminate TLS for remote use.
 
-For tested local Swarm, Compose, and Minikube commands and deployment learnings, see [deployments.md](deployments.md). There is currently no cluster UI; use the API or `caphe cluster` CLI.
+For tested local Swarm, Compose, and Minikube commands and deployment learnings, see [deployments.md](deployments.md). The installed `caphe ui` workbench supports authenticated run discovery, ZIP submissions, and investigation alongside the API and `caphe cluster` CLI.
 
 ## Docker Compose
 

@@ -1,0 +1,30 @@
+# Public repository workflows deliberately use GitHub-hosted runners.
+# Future Beelink VM jobs are controlled by a separate private repository.
+name: Manual Linux smoke test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: beelink-smoke
+  cancel-in-progress: false
+jobs:
+  smoke:
+    if: github.repository == 'andrew-ships-stuff/caphe' && github.ref == 'refs/heads/main' && github.actor == 'andrew-ships-stuff'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4, matching caphe CI
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0, matching caphe CI
+        with:
+          go-version: '1.27.x'
+          cache: false
+      - name: Test, vet and build caphe
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./... -count=1
+          go vet ./...
+          go build -o "${RUNNER_TEMP}/caphe" ./cmd/caphe

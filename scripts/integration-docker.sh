@@ -6,12 +6,14 @@ case "${1:-}" in
     api=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=api)
     workers=$(docker ps -q --filter "label=com.docker.compose.project=$project" --filter label=com.docker.compose.service=worker)
     port=8787
+    ui_port=3000
     ;;
   swarm)
     stack=${CAPHE_SWARM_STACK:-caphe-local}
     api=$(docker ps -q --filter "label=com.docker.swarm.service.name=${stack}_api")
     workers=$(docker ps -q --filter "label=com.docker.swarm.service.name=${stack}_worker")
     port=8788
+    ui_port=3003
     ;;
   *) echo 'usage: integration-docker.sh compose|swarm' >&2; exit 1 ;;
 esac
@@ -28,4 +30,4 @@ for worker in $workers; do
     exit 1
   fi
 done
-CAPHE_TEST_ENDPOINT="http://127.0.0.1:$port" go test ./tests/deployments -count=1 -v -timeout=10m
+CAPHE_TEST_UI_ENDPOINT="http://127.0.0.1:$ui_port" CAPHE_TEST_ENDPOINT="http://127.0.0.1:$port" go test ./tests/deployments -count=1 -v -timeout=10m

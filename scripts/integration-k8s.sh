@@ -5,6 +5,7 @@ namespace=${CAPHE_K8S_NAMESPACE:-caphe-local}
 k=(kubectl --context "$context" -n "$namespace")
 "${k[@]}" rollout status deployment/caphe-api --timeout=180s
 "${k[@]}" rollout status deployment/caphe-worker --timeout=180s
+"${k[@]}" rollout status deployment/caphe-ui --timeout=180s
 api_ip=$("${k[@]}" get service caphe -o jsonpath='{.spec.clusterIP}')
 # Positive control proves the destination is reachable before checking denial.
 "${k[@]}" exec deployment/caphe-api -- timeout 5 bash -c "echo > /dev/tcp/$api_ip/8787"
@@ -19,10 +20,15 @@ fi
 log=$(mktemp)
 "${k[@]}" port-forward --address 127.0.0.1 service/caphe 18787:8787 >"$log" 2>&1 &
 forward_pid=$!
+ui_log=$(mktemp)
+"${k[@]}" port-forward --address 127.0.0.1 service/caphe-ui 13000:3000 >"$ui_log" 2>&1 &
+ui_pid=$!
 cleanup() {
   kill "$forward_pid" 2>/dev/null || true
   wait "$forward_pid" 2>/dev/null || true
-  rm -f "$log"
+  kill "$ui_pid" 2>/dev/null || true
+  wait "$ui_pid" 2>/dev/null || true
+  rm -f "$log" "$ui_log"
 }
 trap cleanup EXIT
 for ((i=0; i<60; i++)); do
@@ -31,4 +37,10 @@ for ((i=0; i<60; i++)); do
   sleep 1
 done
 if ! grep -q 'Forwarding from 127.0.0.1:18787' "$log"; then cat "$log"; exit 1; fi
-CAPHE_TEST_ENDPOINT=http://127.0.0.1:18787 go test ./tests/deployments -count=1 -v -timeout=10m
+for ((i=0; i<60; i++)); do
+  if grep -q 'Forwarding from 127.0.0.1:13000' "$ui_log" && curl -fsS http://127.0.0.1:13000/healthz >/dev/null; then break; fi
+  if ! kill -0 "$ui_pid" 2>/dev/null; then cat "$ui_log"; exit 1; fi
+  sleep 1
+done
+if ! grep -q 'Forwarding from 127.0.0.1:13000' "$ui_log"; then cat "$ui_log"; exit 1; fi
+CAPHE_TEST_UI_ENDPOINT=http://127.0.0.1:13000 CAPHE_TEST_ENDPOINT=http://127.0.0.1:18787 go test ./tests/deployments -count=1 -v -timeout=10m

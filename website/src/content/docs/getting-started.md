@@ -60,6 +60,13 @@ Caphe publishes checksum-pinned release binaries through its Homebrew tap. A sou
 
 </Steps>
 
+## Open the installed workbench
+
+Run `caphe ui`, then open `http://127.0.0.1:3000`. Import a completed audit bundle
+or connect to a cluster API to investigate findings and compare runs. The workbench
+is an installed product interface, separate from this documentation site. See the
+[workbench guide](../workbench/) for launch commands and evidence boundaries.
+
 ## State location
 
 Caphe stores SQLite state and content-addressed raw artifacts under the user configuration directory in a `caphe/` folder. Use an isolated location in CI or tests:
