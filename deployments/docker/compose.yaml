@@ -1,5 +1,23 @@
 services:
+  ui:
+    image: caphe-workbench:local
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile.ui
+    command: [ui, --listen=0.0.0.0:3000, --api=http://api:8787]
+    ports:
+      - "127.0.0.1:3000:3000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    depends_on: [api]
+    mem_limit: 256m
+
   api:
+    image: caphe-cluster:local
     build:
       context: ../..
       dockerfile: deployments/docker/Dockerfile.cluster
@@ -29,6 +47,11 @@ services:
       - ALL
 
   worker:
+    environment:
+      SYFT_CHECK_FOR_APP_UPDATE: "false"
+      GRYPE_CHECK_FOR_APP_UPDATE: "false"
+      GRYPE_DB_AUTO_UPDATE: "false"
+    image: caphe-cluster:local
     build:
       context: ../..
       dockerfile: deployments/docker/Dockerfile.cluster

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,6 +61,7 @@ func NewServer(config ServerConfig) (*Server, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", server.health)
 	mux.HandleFunc("GET /v1/workflows", server.authorize(server.workflows))
+	mux.HandleFunc("GET /v1/jobs", server.authorize(server.listJobs))
 	mux.HandleFunc("POST /v1/jobs", server.authorize(server.submit))
 	mux.HandleFunc("GET /v1/jobs/{id}", server.authorize(server.getJob))
 	mux.HandleFunc("GET /v1/jobs/{id}/bundle", server.authorize(server.bundle))
@@ -318,4 +320,26 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (s *Server) listJobs(w http.ResponseWriter, r *http.Request, tenant string) {
+	limit := 100
+	if value := r.URL.Query().Get("limit"); value != "" {
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > 200 {
+			writeError(w, 400, "limit must be between 1 and 200")
+			return
+		}
+		limit = n
+	}
+	page, err := s.config.Store.ListJobs(tenant, r.URL.Query().Get("cursor"), limit)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			writeError(w, 400, "invalid cursor")
+		} else {
+			writeError(w, 500, "list jobs")
+		}
+		return
+	}
+	writeJSON(w, 200, page)
 }

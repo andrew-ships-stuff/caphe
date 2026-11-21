@@ -1,0 +1,14 @@
+FROM golang:1.27@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/caphe ./cmd/caphe
+
+FROM alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
+RUN apk add --no-cache ca-certificates
+COPY --from=build /out/caphe /usr/local/bin/caphe
+USER 65532:65532
+EXPOSE 3000
+ENTRYPOINT ["/usr/local/bin/caphe"]
+CMD ["ui", "--listen=0.0.0.0:3000", "--api=http://api:8787"]

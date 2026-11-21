@@ -16,6 +16,36 @@ Security scanners—not an LLM—produce Caphe's potential vulnerability finding
 
 Caphe runs locally without a GPU, Docker, Kubernetes, API key, or database server. Release binaries embed the checksum-pinned native CPU runtime. Audits enable local inference by default, including JSON and non-interactive execution; `--ai=false` selects scanner-only execution. The same audit engine runs behind the authenticated cluster API, with one operator-controlled model runtime shared by each worker's concurrent jobs.
 
+## How it works
+
+Scanners produce findings; Caphe only compiles, executes, correlates, and reports. The optional model never enters the finding path — it can only annotate.
+
+```mermaid
+flowchart TD
+    W["Workflow YAML<br/>file or caphe:name bundled"] --> C["Compiler<br/>lock plan · adapter pins · gates · SHA-256 digest"]
+    C --> L["Workflow lock<br/>content-addressed"]
+    T["Target directory / repository"] --> R
+
+    L --> R["Runtime DAG executor<br/>retries · budgets · cancellation"]
+    R --> A["Typed adapters<br/>argument arrays · no shell"]
+    A --> S["Installed scanners<br/>Opengrep · Syft · Grype · Gitleaks · Poutine<br/>OPA · OSV-Scanner · Checkov · Kubescape"]
+    S -->|"raw output preserved"| E["SQLite evidence store<br/>+ content-addressed artifacts"]
+    E --> N["Normalize & correlate findings"]
+
+    N --> M{{"Optional CPU LLM · llama.cpp<br/>loopback only · digest-verified model · budgets"}}
+    M -->|"labeled hypothesis · never policy"| B
+    N --> B["Digest-pinned audit bundle<br/>JSON + SARIF + Markdown · plus HTML report"]
+
+    subgraph cluster["Self-hosted cluster mode — same engine"]
+        API["Authenticated cluster API<br/>bearer tokens · bounded submissions"] --> Q["Shared-volume job queue"]
+        Q --> WK["Workers · no network<br/>one task DAG per job"]
+    end
+    API -.->|"compiled lock + target archive"| R
+    B --> UI["caphe ui workbench · GitHub PR annotations"]
+```
+
+Missing optional scanners become explicit `skipped` tasks, never fabricated findings; a failed or skipped scanner marks the audit `incomplete` while retaining all available evidence.
+
 ## Quick start
 
 ```bash

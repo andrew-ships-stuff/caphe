@@ -67,6 +67,8 @@ caphe cluster download job-... --output caphe-audit.json
 
 The client permits plaintext HTTP only for loopback endpoints so bearer tokens are not sent over remote cleartext connections. A reverse proxy or ingress must terminate TLS for remote use.
 
+For tested local Swarm, Compose, and Minikube commands and deployment learnings, see [deployments.md](deployments.md). There is currently no cluster UI; use the API or `caphe cluster` CLI.
+
 ## Docker Compose
 
 Copy `deployments/docker/auth.example.json` to the ignored `deployments/docker/auth.json`, replace the token, then run:
@@ -79,7 +81,7 @@ The API binds only to host loopback. Workers use `network_mode: none`, a read-on
 
 ## Helm
 
-The chart requires an existing Secret and a storage class that supports `ReadWriteMany` when using more than one pod:
+The chart requires an existing Secret and a storage class that supports `ReadWriteMany` when sharing the queue across nodes. The single-node Minikube override uses `ReadWriteOnce`, which permits multiple pods on that node:
 
 ```bash
 kubectl create secret generic caphe-auth \
