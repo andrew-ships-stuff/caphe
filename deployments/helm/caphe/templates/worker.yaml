@@ -35,6 +35,10 @@ spec:
             - --task-concurrency={{ .Values.worker.taskConcurrency }}
             - --ai-model-cache=/opt/caphe/models
             - --network-enforced
+          env:
+            - {name: SYFT_CHECK_FOR_APP_UPDATE, value: "false"}
+            - {name: GRYPE_CHECK_FOR_APP_UPDATE, value: "false"}
+            - {name: GRYPE_DB_AUTO_UPDATE, value: "false"}
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}
           securityContext:

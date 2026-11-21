@@ -61,7 +61,7 @@ func (a *app) root() *cobra.Command {
 	defaultDir, _ := os.UserConfigDir()
 	c.PersistentFlags().StringVar(&a.dataDir, "data-dir", filepath.Join(defaultDir, "caphe"), "state and artifact directory")
 	c.PersistentFlags().BoolVar(&a.jsonOutput, "json", false, "emit machine-readable JSON")
-	c.AddCommand(a.version(), a.setupCmd(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.clusterCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
+	c.AddCommand(a.version(), a.setupCmd(), a.doctor(), a.initCmd(), a.hardwareCmd(), a.aiCmd(), a.toolsCmd(), a.workflowsCmd(), a.compileCmd(), a.validateCmd(), a.runCmd(), a.scanCmd(), a.auditCmd(), a.clusterCmd(), a.uiCmd(), a.findingsCmd(), a.graphCmd(), a.reportCmd(), a.benchmarkCmd(), a.githubCmd())
 	return c
 }
 func (a *app) print(v any) error {

@@ -1,0 +1,79 @@
+version: "3.8"
+services:
+  ui:
+    image: caphe-workbench:local
+    command: [ui, --listen=0.0.0.0:3000, --api=http://api:8787]
+    ports:
+      - target: 3000
+        published: 3003
+        mode: host
+    networks: [api]
+    read_only: true
+    volumes:
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 268435456
+    cap_drop: [ALL]
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: {cpus: '0.5', memory: 256M}
+  api:
+    image: caphe-cluster:local
+    command: [cluster, serve, --listen=0.0.0.0:8787, --root=/var/lib/caphe/cluster, --auth-file=/run/secrets/caphe-auth, --workflow=caphe:default, --network-enforced, --max-cpu-millis=2000, --max-memory=4GiB]
+    ports:
+      - target: 8787
+        published: 8788
+        mode: host
+    volumes:
+      - cluster-data:/var/lib/caphe/cluster
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2147483648
+    secrets: [caphe-auth]
+    read_only: true
+    cap_drop: [ALL]
+    networks: [api]
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: {cpus: '1', memory: 1G}
+  worker:
+    environment:
+      SYFT_CHECK_FOR_APP_UPDATE: "false"
+      GRYPE_CHECK_FOR_APP_UPDATE: "false"
+      GRYPE_DB_AUTO_UPDATE: "false"
+    image: caphe-cluster:local
+    command: [cluster, worker, --root=/var/lib/caphe/cluster, --concurrency=1, --task-concurrency=2, --ai-model-cache=/opt/caphe/models, --ai-threads=2, --network-enforced, --max-output-bytes=67108864]
+    volumes:
+      - cluster-data:/var/lib/caphe/cluster
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 2147483648
+    read_only: true
+    cap_drop: [ALL]
+    networks: [worker]
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      resources:
+        limits: {cpus: '2', memory: 4G}
+volumes:
+  cluster-data:
+secrets:
+  caphe-auth:
+    file: ./auth.json
+networks:
+  api:
+    driver: overlay
+  worker:
+    driver: overlay
+    internal: true

@@ -1,0 +1,21 @@
+# Single-node Minikube only: API and worker share the same node-local PVC.
+image:
+  repository: caphe-cluster
+  tag: local
+  pullPolicy: Never
+auth:
+  existingSecret: caphe-auth
+storage:
+  accessMode: ReadWriteOnce
+  storageClassName: standard
+  size: 5Gi
+worker:
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {cpu: '2', memory: 4Gi}
+
+ui:
+  image:
+    repository: caphe-workbench
+    tag: local
+    pullPolicy: Never

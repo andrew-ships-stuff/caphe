@@ -374,3 +374,58 @@ func writeJSONAtomic(path string, value any) error {
 	}
 	return os.Rename(name, path)
 }
+
+type JobPage struct {
+	Jobs       []Job  `json:"jobs"`
+	NextCursor string `json:"nextCursor,omitempty"`
+}
+
+func (s *Store) ListJobs(tenant, cursor string, limit int) (JobPage, error) {
+	if !validTenant(tenant) || limit < 1 || limit > 200 {
+		return JobPage{}, fmt.Errorf("invalid job listing request")
+	}
+	var before Job
+	if cursor != "" {
+		var err error
+		before, err = s.LoadJob(cursor)
+		if err != nil || before.Tenant != tenant {
+			return JobPage{}, ErrNotFound
+		}
+	}
+	entries, err := os.ReadDir(filepath.Join(s.root, "jobs"))
+	if err != nil {
+		return JobPage{}, err
+	}
+	jobs := []Job{}
+	for _, entry := range entries {
+		if !entry.IsDir() || !validJobID(entry.Name()) {
+			continue
+		}
+		job, err := s.LoadJob(entry.Name())
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return JobPage{}, err
+		}
+		if job.Tenant != tenant {
+			continue
+		}
+		if cursor != "" && (job.CreatedAt.After(before.CreatedAt) || (job.CreatedAt.Equal(before.CreatedAt) && job.ID >= before.ID)) {
+			continue
+		}
+		jobs = append(jobs, job)
+	}
+	sort.Slice(jobs, func(i, j int) bool {
+		if jobs[i].CreatedAt.Equal(jobs[j].CreatedAt) {
+			return jobs[i].ID > jobs[j].ID
+		}
+		return jobs[i].CreatedAt.After(jobs[j].CreatedAt)
+	})
+	page := JobPage{Jobs: jobs}
+	if len(jobs) > limit {
+		page.Jobs = jobs[:limit]
+		page.NextCursor = jobs[limit-1].ID
+	}
+	return page, nil
+}
