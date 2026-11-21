@@ -4,8 +4,31 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/andrew-ships-stuff/caphe/internal/adapters"
 	"github.com/andrew-ships-stuff/caphe/internal/findings"
 )
+
+func TestSameAdvisoryRetainsDistinctPackages(t *testing.T) {
+	parsed, err := adapters.ParseScannerOutput("scanner.grype", []byte(`{"matches":[{"vulnerability":{"id":"CVE-2026-1","severity":"High"},"artifact":{"name":"first","version":"1"}},{"vulnerability":{"id":"CVE-2026-1","severity":"High"},"artifact":{"name":"second","version":"1"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(filepath.Join(t.TempDir(), "findings.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if err := store.BeginExecution(t.Context(), "run", "digest", "."); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveFindings(t.Context(), "run", parsed.Findings); err != nil {
+		t.Fatal(err)
+	}
+	items, err := store.ListFindingsForExecution(t.Context(), "run")
+	if err != nil || len(items) != 2 {
+		t.Fatalf("package evidence lost: %v %v", items, err)
+	}
+}
 
 func TestFindingRoundTripAndGraphNode(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "test.db"))

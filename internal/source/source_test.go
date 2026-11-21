@@ -63,6 +63,24 @@ func TestPrepareZIPRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestPrepareZIPPreservesHiddenRepositoryDirectories(t *testing.T) {
+	for _, prefix := range []string{"", "repository/"} {
+		t.Run(prefix, func(t *testing.T) {
+			archive := filepath.Join(t.TempDir(), "snapshot.zip")
+			name := ".github/workflows/check.yml"
+			writeZIP(t, archive, map[string]string{prefix + name: "name: check\n"})
+			prepared, err := Prepare(archive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer prepared.Cleanup()
+			if _, err := os.Stat(filepath.Join(prepared.Path, filepath.FromSlash(name))); err != nil {
+				t.Fatalf("repository-relative workflow was lost: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateZIPHonorsConfiguredLimits(t *testing.T) {
 	archive := filepath.Join(t.TempDir(), "limited.zip")
 	writeZIP(t, archive, map[string]string{"one.txt": "12345", "two.txt": "67890"})

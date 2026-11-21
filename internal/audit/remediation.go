@@ -20,7 +20,7 @@ type advisoryLink struct {
 	URL template.URL
 }
 
-type remediationGroup struct {
+type RemediationGroup struct {
 	ID               string
 	Kind             string // "package" or "finding"
 	Package          string
@@ -30,6 +30,7 @@ type remediationGroup struct {
 	Severity         string
 	AdvisoryIDs      []string
 	AdvisoryCount    int
+	AdvisoryAliases  map[string][]string `json:"advisoryAliases,omitempty"`
 	CVECount         int
 	AdvisoryLinks    []advisoryLink
 	MoreCount        int
@@ -43,8 +44,10 @@ type remediationGroup struct {
 	Description      string
 	Evidence         string
 	AI               string
-	Prompt           string
+	Prompt           string `json:"-"`
 }
+
+type remediationGroup = RemediationGroup
 
 type htmlData struct {
 	Payload string
@@ -116,8 +119,19 @@ func packageInfoFor(finding findings.Finding) packageInfo {
 		vulnerability, _ := finding.Properties["vulnerability"].(map[string]any)
 		info.name, _ = pkg["name"].(string)
 		info.installed, _ = pkg["version"].(string)
+		info.ecosystem, _ = pkg["ecosystem"].(string)
 		info.advisory, _ = vulnerability["id"].(string)
 		info.fixed = fixVersions(vulnerability)
+	}
+	switch strings.ToLower(info.ecosystem) {
+	case "go", "go-module":
+		info.ecosystem = "Go"
+	case "npm", "javascript", "js":
+		info.ecosystem = "npm"
+	case "pypi", "python":
+		info.ecosystem = "PyPI"
+	case "maven", "java-archive":
+		info.ecosystem = "Maven"
 	}
 	info.ok = info.name != "" && info.installed != ""
 	return info
@@ -168,10 +182,7 @@ func buildRemediation(bundle *Bundle) ([]remediationGroup, string) {
 	var order []string
 	for _, finding := range bundle.Findings {
 		info := packageInfoFor(finding)
-		key := strings.Join([]string{"finding", finding.Tool, finding.RuleID, findingLocation(finding), finding.Title}, "\x00")
-		if info.ok {
-			key = strings.Join([]string{"package", finding.Tool, info.ecosystem, info.name, info.installed}, "\x00")
-		}
+		key := findings.GroupKey(finding)
 		group, exists := groups[key]
 		if !exists {
 			group = &remediationGroup{Severity: string(finding.Severity)}
@@ -239,14 +250,19 @@ func buildRemediation(bundle *Bundle) ([]remediationGroup, string) {
 		group.ID = fmt.Sprintf("r%d", i+1)
 		sort.Strings(group.AdvisoryIDs)
 		sort.Strings(group.AdvisoryFixes)
-		group.AdvisoryCount = len(group.AdvisoryIDs)
-		for _, advisory := range group.AdvisoryIDs {
-			allAdvisories[advisory] = true
-			if cvePattern.MatchString(advisory) {
-				allCVEs[advisory] = true
+		group.AdvisoryAliases = advisoryAliases(bundle, group)
+		group.AdvisoryCount = len(group.AdvisoryAliases)
+		groupCVEs := map[string]bool{}
+		for canonical, aliases := range group.AdvisoryAliases {
+			allAdvisories[canonical] = true
+			for _, advisory := range aliases {
+				if cvePattern.MatchString(advisory) {
+					allCVEs[advisory] = true
+					groupCVEs[advisory] = true
+				}
 			}
 		}
-		group.CVECount = len(cvesIn(group.AdvisoryIDs))
+		group.CVECount = len(groupCVEs)
 		group.AdvisoryLinks = make([]advisoryLink, 0, len(group.AdvisoryIDs))
 		for _, advisory := range group.AdvisoryIDs {
 			group.AdvisoryLinks = append(group.AdvisoryLinks, advisoryLinkFor(advisory))

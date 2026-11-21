@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,7 +18,7 @@ import (
 type Scanner struct{ id, binary, version string }
 
 func NewScanner(id, binary string) *Scanner {
-	return &Scanner{id: id, binary: binary, version: "adapter-v1"}
+	return &Scanner{id: id, binary: binary, version: "adapter-v2"}
 }
 func (s *Scanner) ID() string                 { return s.id }
 func (s *Scanner) Version() string            { return s.version }
@@ -173,7 +174,7 @@ func (s *Scanner) args(target string, cfg map[string]any, inputs map[string]stri
 		}
 		return []string{input, "-o", "json"}, nil
 	case "scanner.gitleaks":
-		return []string{"detect", "--source", ".", "--report-format", "json", "--report-path", "-", "--redact", "--exit-code", "0"}, nil
+		return []string{"dir", ".", "--report-format", "json", "--report-path", "-", "--redact", "--exit-code", "0"}, nil
 	case "scanner.poutine":
 		args := []string{"analyze_local", ".", "--format", "sarif", "--quiet"}
 		if v, ok := cfg["config"].(string); ok && v != "" {
@@ -234,6 +235,9 @@ func (s *Scanner) args(target string, cfg map[string]any, inputs map[string]stri
 func ParseScannerOutput(tool string, raw []byte) (findings.Result, error) {
 	var doc any
 	if err := json.Unmarshal(raw, &doc); err != nil {
+		return findings.Result{}, fmt.Errorf("parse %s JSON: %w", tool, err)
+	}
+	if err := validateScannerDocument(tool, doc); err != nil {
 		return findings.Result{}, fmt.Errorf("parse %s JSON: %w", tool, err)
 	}
 	result := findings.Result{Metadata: map[string]any{"source": tool}}
@@ -525,8 +529,23 @@ func newFinding(tool, rule, title, sev, path string, line int, props map[string]
 	if title == "" {
 		title = rule
 	}
-	fpRaw := tool + "\x00" + rule + "\x00" + filepath.ToSlash(path) + fmt.Sprint(line)
-	sum := sha256.Sum256([]byte(fpRaw))
+	identity := []any{tool, rule, filepath.ToSlash(path), line}
+	// An advisory can affect multiple package instances in the same snapshot.
+	if tool == "scanner.grype" {
+		artifact, _ := props["artifact"].(map[string]any)
+		locations, _ := artifact["locations"].([]any)
+		locations = append([]any(nil), locations...)
+		sort.Slice(locations, func(i, j int) bool {
+			left, _ := json.Marshal(locations[i])
+			right, _ := json.Marshal(locations[j])
+			return string(left) < string(right)
+		})
+		identity = append(identity, artifact["name"], artifact["version"], artifact["type"], artifact["purl"], locations)
+	} else if tool == "scanner.osv" {
+		identity = append(identity, props["package"])
+	}
+	fpRaw, _ := json.Marshal(identity)
+	sum := sha256.Sum256(fpRaw)
 	fp := "sha256:" + hex.EncodeToString(sum[:])
 	return findings.Finding{ID: fp, Fingerprint: fp, Tool: tool, RuleID: rule, Title: title, Severity: normalizedSeverity(sev), Location: findings.Location{Path: filepath.ToSlash(path), StartLine: line}, Properties: props}
 }

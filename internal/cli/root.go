@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -419,12 +418,11 @@ func (a *app) reportCmd() *cobra.Command {
 func (a *app) aiCmd() *cobra.Command {
 	c := &cobra.Command{Use: "ai", Short: "Inspect optional CPU-only inference"}
 	c.AddCommand(&cobra.Command{Use: "status", RunE: func(cmd *cobra.Command, _ []string) error {
-		p, _ := inference.NewLlamaCPP("http://127.0.0.1:8080", 2*time.Second)
-		ok, err := p.Available(cmd.Context())
+		status, err := a.localAIStatus()
 		if err != nil {
 			return err
 		}
-		return a.print(map[string]any{"enabled": false, "provider": "llama.cpp", "available": ok, "managed": false})
+		return a.print(status)
 	}}, &cobra.Command{Use: "models", RunE: func(cmd *cobra.Command, _ []string) error { return a.print(hardware.SupportedModels()) }}, &cobra.Command{Use: "recommend", RunE: func(cmd *cobra.Command, _ []string) error {
 		i, err := hardware.Inspect(cmd.Context(), a.dataDir)
 		if err != nil {
@@ -432,10 +430,11 @@ func (a *app) aiCmd() *cobra.Command {
 		}
 		return a.print(hardware.Recommend(i))
 	}}, &cobra.Command{Use: "doctor", RunE: func(cmd *cobra.Command, _ []string) error {
-		p, _ := inference.NewLlamaCPP("http://127.0.0.1:8080", 2*time.Second)
-		ok, _ := p.Available(cmd.Context())
-		path, _ := exec.LookPath("llama-server")
-		return a.print(map[string]any{"serverReachable": ok, "runtimePath": path, "loopbackOnly": true, "models": hardware.SupportedModels()})
+		status, err := a.localAIStatus()
+		if err != nil {
+			return err
+		}
+		return a.print(status)
 	}})
 	c.AddCommand(a.aiAnalyzeCmd())
 	return c

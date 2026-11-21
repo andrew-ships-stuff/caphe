@@ -1,6 +1,6 @@
 module github.com/andrew-ships-stuff/caphe
 
-go 1.26.0
+go 1.27.4
 
 require (
 	github.com/shirou/gopsutil/v4 v4.26.10

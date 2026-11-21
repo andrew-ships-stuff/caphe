@@ -9,6 +9,22 @@ import (
 	"github.com/andrew-ships-stuff/caphe/internal/adapters"
 )
 
+func TestLocalAIStatusReportsDefaultAndSavedPreference(t *testing.T) {
+	t.Setenv("CAPHE_LLAMA_SERVER", "/missing-cpu-runtime")
+	a := &app{dataDir: t.TempDir()}
+	status, err := a.localAIStatus()
+	if err != nil || status["enabled"] != true || status["managed"] != true || status["available"] != false {
+		t.Fatalf("default status: %v %v", status, err)
+	}
+	if err := a.saveSettings(userSettings{Configured: true, AIEnabled: false}); err != nil {
+		t.Fatal(err)
+	}
+	status, err = a.localAIStatus()
+	if err != nil || status["enabled"] != false {
+		t.Fatalf("saved opt-out ignored: %v %v", status, err)
+	}
+}
+
 func TestDoctorSuggestionsOfferManagedFixAndDayOneAudit(t *testing.T) {
 	tools := []adapters.ToolInfo{
 		{ID: "scanner.gitleaks", Error: "not found"},

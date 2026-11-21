@@ -1,0 +1,10 @@
+.git
+bin
+dist
+website/node_modules
+website/dist
+website/.astro
+internal/native/payload/runtime.archive
+caphe-audit*
+.caphe
+deployments/docker/auth.json

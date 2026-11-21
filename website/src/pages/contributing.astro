@@ -14,7 +14,7 @@ cd caphe
 go test ./...
 go vet ./...
 go build -o caphe ./cmd/caphe
-./caphe doctor</code></pre></div><p>Go 1.26 or newer is required for this development snapshot. Scanner binaries are needed only for workflows or integration tests that invoke them.</p></section>
+./caphe doctor</code></pre></div><p>Go 1.27 or newer is required for this development snapshot. Scanner binaries are needed only for workflows or integration tests that invoke them.</p></section>
     <section><h2>Where to contribute</h2><div class="cards">{sections.map(({ icon: Icon, title, text }) => <article><Icon/><h3>{title}</h3><p>{text}</p></article>)}</div></section>
     <section class="tests"><h2>Testing expectations</h2><ul><li>Run <code>go test ./...</code>, <code>go vet ./...</code>, and <code>go build ./cmd/caphe</code>.</li><li>Add fixtures that preserve raw tool records and cover malformed, oversized, missing, and partially failing inputs.</li><li>Keep canonical compilation stable across repeated runs; avoid timestamps in lock content.</li><li>For website work, run <code>npm ci</code>, <code>npm run build</code>, and <code>npm run test:links</code> inside <code>website/</code>.</li><li>Do not turn a model hypothesis into a confirmed finding without an independent verification transition.</li></ul></section>
     <section class="security"><ShieldAlert/><div><h2>Security reports</h2><p>The repository does not yet include a dedicated <code>SECURITY.md</code> or published private disclosure channel. Do not open an issue containing exploit details. Open a minimal issue asking the maintainer for a private contact, without sensitive reproduction information.</p></div></section>

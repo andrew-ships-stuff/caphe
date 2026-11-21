@@ -38,6 +38,8 @@ services:
       - --root=/var/lib/caphe/cluster
       - --concurrency=1
       - --task-concurrency=2
+      - --ai-model-cache=/opt/caphe/models
+      - --ai-threads=2
       - --network-enforced
       - --max-output-bytes=67108864
     volumes:

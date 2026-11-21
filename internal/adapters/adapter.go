@@ -19,6 +19,7 @@ type ToolInfo struct {
 }
 
 type Request struct {
+	Evidence     []findings.Finding
 	Target       string
 	Config       json.RawMessage
 	Inputs       map[string]string

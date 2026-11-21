@@ -33,6 +33,7 @@ spec:
             - --root=/var/lib/caphe/cluster
             - --concurrency={{ .Values.worker.concurrency }}
             - --task-concurrency={{ .Values.worker.taskConcurrency }}
+            - --ai-model-cache=/opt/caphe/models
             - --network-enforced
           resources:
             {{- toYaml .Values.worker.resources | nindent 12 }}

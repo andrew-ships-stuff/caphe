@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/andrew-ships-stuff/caphe/internal/native"
 	"io"
 	"net"
 	"net/http"
@@ -19,7 +20,7 @@ import (
 	"time"
 )
 
-var managedLlamaPinnedVersion = "b12359"
+var managedLlamaPinnedVersion = native.Version
 
 const maxServerLogTail = 8 << 10
 
@@ -28,6 +29,8 @@ type ServerOptions struct {
 	ModelPath      string
 	ModelID        string
 	Threads        int
+	Parallel       int
+	ContextTokens  int
 	StartupTimeout time.Duration
 }
 
@@ -46,6 +49,9 @@ func ResolveLlamaServer(explicit string) (string, error) {
 	}
 	if env := strings.TrimSpace(os.Getenv("CAPHE_LLAMA_SERVER")); env != "" {
 		return requireExecutable(env)
+	}
+	if binary, err := native.Resolve(managedToolsDir()); err != nil || binary != "" {
+		return binary, err
 	}
 	base := filepath.Join(managedToolsDir(), fmt.Sprintf("llama.cpp-%s", managedLlamaPinnedVersion))
 	for _, candidate := range []string{filepath.Join(base, llamaServerName()), filepath.Join(base, "bin", llamaServerName())} {
@@ -116,10 +122,7 @@ func StartServer(ctx context.Context, options ServerOptions) (*Server, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
 	}
-	args := []string{"-m", options.ModelPath, "--host", "127.0.0.1"}
-	if options.Threads > 0 {
-		args = append(args, "--threads", fmt.Sprintf("%d", options.Threads))
-	}
+	args := serverArgs(options)
 	logTail := &cappedBuffer{limit: maxServerLogTail}
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
@@ -204,7 +207,7 @@ func EnsureModel(ctx context.Context, cacheDir, rawURL, digest string, client ..
 	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 		return "", fmt.Errorf("model URL must be HTTPS without credentials")
 	}
-	httpClient := http.DefaultClient
+	httpClient := &http.Client{Timeout: 10 * time.Minute}
 	if len(client) > 0 && client[0] != nil {
 		httpClient = client[0]
 	}
@@ -253,6 +256,17 @@ func EnsureModel(ctx context.Context, cacheDir, rawURL, digest string, client ..
 		return "", err
 	}
 	return final, nil
+}
+
+func CachedModel(cacheDir, digest string) (string, error) {
+	if !modelDigestPattern.MatchString(digest) {
+		return "", fmt.Errorf("invalid model digest")
+	}
+	path := filepath.Join(cacheDir, strings.TrimPrefix(digest, "sha256:")+".gguf")
+	if err := verifyFileDigest(path, digest); err != nil {
+		return "", fmt.Errorf("verified offline model unavailable: %w", err)
+	}
+	return path, nil
 }
 
 func verifyFileDigest(path, digest string) error {

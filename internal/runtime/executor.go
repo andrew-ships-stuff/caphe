@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -109,7 +110,10 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 	states := map[string]TaskResult{}
 	artPaths := map[string]string{}
 	allFindings := []findings.Finding{}
+	findingsByTask := map[string][]findings.Finding{}
+	planTasks := map[string]compiler.PlanTask{}
 	for _, t := range plan.Tasks {
+		planTasks[t.ID] = t
 		states[t.ID] = TaskResult{ID: t.ID, Uses: t.Uses, Status: StatusPending}
 	}
 	remaining := len(plan.Tasks)
@@ -170,13 +174,29 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 				states[t.ID] = r
 				e.report(TaskEvent{Task: t, Result: r})
 				inputs := map[string]string{}
+				var evidence []findings.Finding
+				visited := map[string]bool{}
+				var collect func(string)
+				collect = func(id string) {
+					if visited[id] {
+						return
+					}
+					visited[id] = true
+					evidence = append(evidence, findingsByTask[id]...)
+					for _, parent := range planTasks[id].Needs {
+						collect(parent)
+					}
+				}
+				for _, parent := range t.Needs {
+					collect(parent)
+				}
 				for _, n := range t.Needs {
 					if p := artPaths[n]; p != "" {
 						inputs["sbom"] = p
 					}
 				}
 				mu.Unlock()
-				result, path, fs := e.runTask(ctx, t, abs, inputs)
+				result, path, fs := e.runTask(ctx, t, abs, inputs, evidence)
 				_ = e.db.SaveTask(ctx, id, t.ID, string(result.Status), result.Attempts, result.ArtifactDigest, result.ErrorClass, result.Error, time.Duration(result.DurationMillis)*time.Millisecond)
 				mu.Lock()
 				states[t.ID] = result
@@ -184,6 +204,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 					artPaths[t.ID] = path
 				}
 				allFindings = append(allFindings, fs...)
+				findingsByTask[t.ID] = fs
 				mu.Unlock()
 				e.report(TaskEvent{Task: t, Result: result, Done: true})
 			}()
@@ -192,10 +213,14 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 		remaining -= len(ready)
 	}
 	failed := false
+	incomplete := false
 	for _, t := range plan.Tasks {
 		r := states[t.ID]
 		m.Tasks = append(m.Tasks, r)
 		m.FindingCount += r.FindingCount
+		if strings.HasPrefix(t.Uses, "scanner.") && r.Status != StatusSucceeded {
+			incomplete = true
+		}
 		if r.Status == StatusFailed && !t.Optional {
 			failed = true
 		}
@@ -205,6 +230,8 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 	}
 	if failed {
 		m.Status = "partial_failure"
+	} else if incomplete {
+		m.Status = "incomplete"
 	} else {
 		m.Status = "succeeded"
 	}
@@ -215,7 +242,7 @@ func (e *Executor) Run(ctx context.Context, plan *compiler.Plan, target string) 
 	return m, nil
 }
 
-func (e *Executor) runTask(parent context.Context, t compiler.PlanTask, target string, inputs map[string]string) (TaskResult, string, []findings.Finding) {
+func (e *Executor) runTask(parent context.Context, t compiler.PlanTask, target string, inputs map[string]string, evidence []findings.Finding) (TaskResult, string, []findings.Finding) {
 	r := TaskResult{ID: t.ID, Uses: t.Uses, Status: StatusFailed}
 	a, _ := e.registry.Get(t.Uses)
 	cfg, _ := workflow.RawConfig(t.With)
@@ -225,7 +252,7 @@ func (e *Executor) runTask(parent context.Context, t compiler.PlanTask, target s
 	for attempt := 1; attempt <= t.Runtime.Retries+1; attempt++ {
 		r.Attempts = attempt
 		ctx, cancel := context.WithTimeout(parent, time.Duration(t.Runtime.TimeoutSeconds)*time.Second)
-		res, last = a.Execute(ctx, adapters.Request{Target: target, Config: cfg, Inputs: inputs, Timeout: time.Duration(t.Runtime.TimeoutSeconds) * time.Second, MaxOutput: 64 << 20})
+		res, last = a.Execute(ctx, adapters.Request{Evidence: evidence, Target: target, Config: cfg, Inputs: inputs, Timeout: time.Duration(t.Runtime.TimeoutSeconds) * time.Second, MaxOutput: 64 << 20})
 		cancel()
 		if last == nil {
 			break
@@ -245,7 +272,7 @@ func (e *Executor) runTask(parent context.Context, t compiler.PlanTask, target s
 	if last != nil {
 		r.ErrorClass = classify(last)
 		r.Error = last.Error()
-		if t.Optional {
+		if t.Optional && r.ErrorClass == "tool_unavailable" {
 			r.Status = StatusSkipped
 		} else {
 			r.Status = StatusFailed
@@ -275,7 +302,7 @@ func classify(err error) string {
 		return "cancelled"
 	case errors.Is(err, adapters.ErrOutputLimit):
 		return "output_limit"
-	case strings.Contains(err.Error(), "unavailable"):
+	case errors.Is(err, exec.ErrNotFound):
 		return "tool_unavailable"
 	default:
 		return "tool_error"

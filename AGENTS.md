@@ -39,7 +39,7 @@ Multiple agents and humans write to this working tree **at the same time**. Assu
 
 ## Setup, build, and test commands
 
-Requires Go 1.26+ (see `.github/workflows/ci.yml`, which tests ubuntu/macos/windows).
+Requires Go 1.27+ (see `.github/workflows/ci.yml`, which tests ubuntu/macos/windows).
 
 ```bash
 make build                 # go build -o bin/caphe ./cmd/caphe

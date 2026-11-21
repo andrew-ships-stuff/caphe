@@ -377,6 +377,8 @@ func statusMark(status string) string {
 		return "✓"
 	case "failed", "error", "critical", "partial_failure", "invalid":
 		return "✗"
+	case "incomplete", "partial":
+		return "!"
 	case "skipped", "pending", "running", "unavailable", "not_run":
 		return "○"
 	default:

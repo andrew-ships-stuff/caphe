@@ -13,12 +13,14 @@ import (
 	"strings"
 
 	"github.com/andrew-ships-stuff/caphe/internal/adapters"
+	"github.com/andrew-ships-stuff/caphe/internal/inference"
+	"github.com/andrew-ships-stuff/caphe/internal/native"
 )
 
 const (
-	dogfoodModelName   = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
-	dogfoodModelURL    = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
-	dogfoodModelDigest = "sha256:1adf0b11065d8ad2e8123ea110d1ec956dab4ab038eab665614adba04b6c3370"
+	dogfoodModelName   = inference.DefaultModel
+	dogfoodModelURL    = inference.DefaultModelURL
+	dogfoodModelDigest = inference.DefaultModelDigest
 )
 
 var managedScannerTools = map[string]string{
@@ -26,6 +28,17 @@ var managedScannerTools = map[string]string{
 	"scanner.grype":    "grype",
 	"scanner.poutine":  "poutine",
 	"scanner.syft":     "syft",
+}
+
+func (a *app) localAIStatus() (map[string]any, error) {
+	settings, err := a.loadSettings()
+	if err != nil {
+		return nil, err
+	}
+	enabled := !settings.Configured || settings.AIEnabled
+	path, runtimeErr := inference.ResolveLlamaServer("")
+	_, modelErr := inference.CachedModel(filepath.Join(a.dataDir, "models"), dogfoodModelDigest)
+	return map[string]any{"enabled": enabled, "provider": "llama.cpp", "available": runtimeErr == nil && modelErr == nil, "runtimeAvailable": runtimeErr == nil, "runtimeEmbedded": native.Available(), "runtimePath": path, "modelVerified": modelErr == nil, "model": dogfoodModelName, "modelDigest": dogfoodModelDigest, "managed": true, "loopbackOnly": true, "launchMode": "ephemeral-loopback-subprocess"}, nil
 }
 
 func doctorSuggestions(tools []adapters.ToolInfo, inferenceStatus inferenceReport) []doctorSuggestion {
@@ -63,8 +76,8 @@ func doctorSuggestions(tools []adapters.ToolInfo, inferenceStatus inferenceRepor
 		}
 	}
 	suggestions = append(suggestions, doctorSuggestion{
-		Title:  "Run the repository's first deterministic audit",
-		Reason: "Missing optional scanners are recorded as skipped; available scanners still produce a complete digest-pinned bundle.",
+		Title:  "Run the repository's first audit",
+		Reason: "Missing optional scanners are skipped; failed scanners remain failed, and the bundle reports incomplete coverage.",
 		Commands: []string{
 			"caphe audit .",
 			"caphe findings list",
@@ -73,7 +86,7 @@ func doctorSuggestions(tools []adapters.ToolInfo, inferenceStatus inferenceRepor
 	})
 	if inferenceStatus.RuntimeAvailable || contains(missingManaged, "llama.cpp") {
 		suggestions = append(suggestions, doctorSuggestion{
-			Title:    "Optionally add one bounded local AI pass",
+			Title:    "Customize the default bounded local AI pass",
 			Reason:   "Caphe downloads the digest-verified model, launches llama-server on an ephemeral loopback port, labels output as hypothesis, and stops the process afterward.",
 			Commands: []string{fmt.Sprintf("caphe audit . --ai --ai-serve --ai-model %s --ai-model-url %s --ai-model-digest %s", shellQuote(dogfoodModelName), shellQuote(dogfoodModelURL), shellQuote(dogfoodModelDigest))},
 		})

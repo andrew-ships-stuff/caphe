@@ -15,5 +15,7 @@ Important limitations:
 - Normalized SAST properties may include source excerpts. Reports and model prompts require appropriate data handling.
 - No active testing or repository build hooks are executed by the built-in workflows.
 - A scanner observation confirms what that scanner reported; it does not independently prove exploitability.
+- Release binaries embed a checksum-pinned native runtime archive, unpacked into a private cache and checked against embedded bytes before use. Model weights are separately digest-verified. Inference explicitly disables GPU offload, accepts loopback endpoints only, and rejects HTTP redirects. A private listener still exists; inference is not in-process Go code.
+- Scan failures remain failed tasks; unavailable optional tools are skipped. Audit coverage must be considered alongside findings. An incomplete scan with zero findings is not a clean bill of health.
 
 Run Caphe in a nonprivileged container or dedicated sandbox when scanning hostile repositories. Do not mount a container engine socket or grant cluster-admin.

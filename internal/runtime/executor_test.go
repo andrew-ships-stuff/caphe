@@ -3,6 +3,9 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -14,6 +17,51 @@ import (
 	"github.com/andrew-ships-stuff/caphe/internal/storage"
 	"github.com/andrew-ships-stuff/caphe/internal/workflow"
 )
+
+type failingAdapter struct {
+	fixedAdapter
+	err error
+}
+
+func (f failingAdapter) Execute(context.Context, adapters.Request) (adapters.Result, error) {
+	return adapters.Result{}, f.err
+}
+
+func TestOptionalFailureIsNotUnavailable(t *testing.T) {
+	for _, tc := range []struct {
+		name, message string
+		status        TaskStatus
+	}{
+		{"absent", "scanner unavailable", StatusSkipped},
+		{"broken", "invalid vulnerability database", StatusFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			store, err := storage.Open(filepath.Join(dir, "state.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			scanErr := errors.New(tc.message)
+			if tc.name == "absent" {
+				scanErr = fmt.Errorf("%s: %w", tc.message, exec.ErrNotFound)
+			}
+			registry := adapters.NewRegistry(failingAdapter{fixedAdapter: fixedAdapter{id: "scanner.fixed"}, err: scanErr})
+			definition, err := workflow.Parse([]byte("apiVersion: caphe.dev/v1alpha1\nkind: SecurityWorkflow\nmetadata: {name: test, version: '1'}\nspec: {target: {type: repository}, tasks: [{id: scan, uses: scanner.fixed, optional: true}]}"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan, err := compiler.New(registry).Compile(definition)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest, err := New(registry, artifacts.New(filepath.Join(dir, "artifacts")), store, 1).Run(t.Context(), plan, dir)
+			if err != nil || manifest.Status != "incomplete" || manifest.Tasks[0].Status != tc.status {
+				t.Fatalf("manifest=%+v err=%v", manifest, err)
+			}
+		})
+	}
+}
 
 type fixedAdapter struct{ id string }
 

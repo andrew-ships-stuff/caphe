@@ -4,7 +4,7 @@ class Caphe < Formula
   license "MIT"
   head "https://github.com/andrew-ships-stuff/caphe.git", branch: "main"
 
-  depends_on "go@1.26" => :build
+  depends_on "go@1.27" => :build
 
   def install
     system "go", "build", *std_go_args(ldflags: "-s -w"), "./cmd/caphe"

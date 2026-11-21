@@ -28,6 +28,9 @@ func TestGenerateStructuredRejectsIncompleteOutput(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			calls := 0
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if fakeTokenization(w, r) {
+					return
+				}
 				calls++
 				var payload map[string]any
 				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -64,6 +67,8 @@ func TestAcceptsLoopbackEndpoint(t *testing.T) {
 
 func TestGenerateStructuredWithTestServer(t *testing.T) {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/apply-template", func(w http.ResponseWriter, r *http.Request) { fakeTokenization(w, r) })
+	mux.HandleFunc("/tokenize", func(w http.ResponseWriter, r *http.Request) { fakeTokenization(w, r) })
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/v1/chat/completions", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -81,5 +86,33 @@ func TestGenerateStructuredWithTestServer(t *testing.T) {
 	}
 	if !json.Valid(res.Output) {
 		t.Fatalf("invalid output: %s", res.Output)
+	}
+}
+
+func fakeTokenization(w http.ResponseWriter, r *http.Request) bool {
+	switch r.URL.Path {
+	case "/apply-template":
+		_, _ = w.Write([]byte(`{"prompt":"formatted"}`))
+		return true
+	case "/tokenize":
+		_, _ = w.Write([]byte(`{"tokens":[1,2,3]}`))
+		return true
+	}
+	return false
+}
+
+func TestInputBudgetRejectsBeforeGeneration(t *testing.T) {
+	generated := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fakeTokenization(w, r) {
+			return
+		}
+		generated = true
+	}))
+	defer srv.Close()
+	p, _ := NewLlamaCPP(srv.URL, time.Second)
+	_, err := p.GenerateStructured(t.Context(), Request{MaxInputTokens: 2, MaxOutputTokens: 10})
+	if err == nil || generated {
+		t.Fatalf("budget not enforced: %v generated=%v", err, generated)
 	}
 }

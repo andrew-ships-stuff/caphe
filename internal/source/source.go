@@ -171,7 +171,8 @@ func extractFile(file *zip.File, path string) error {
 
 func unwrapSingleDirectory(root string) string {
 	entries, err := os.ReadDir(root)
-	if err == nil && len(entries) == 1 && entries[0].IsDir() {
+	// Hidden directories such as .github are repository content, not ZIP wrappers.
+	if err == nil && len(entries) == 1 && entries[0].IsDir() && !strings.HasPrefix(entries[0].Name(), ".") {
 		return filepath.Join(root, entries[0].Name())
 	}
 	return root

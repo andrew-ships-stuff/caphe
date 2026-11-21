@@ -7,7 +7,11 @@ TOOLS ?= poutine,actionlint,syft,grype,gitleaks,llama.cpp
 build:
 	go build -o bin/caphe ./cmd/caphe
 
-install: build install-tools
+build-release:
+	go run ./scripts/embed-runtime
+	go build -tags bundled -trimpath -o bin/caphe ./cmd/caphe
+
+install: build-release install-tools
 	@mkdir -p "$(CAPHE_BIN)" "$(CAPHE_CACHE)/libexec"
 	install -m 0755 bin/caphe "$(CAPHE_BIN)/caphe"
 	install -m 0755 scripts/install-tools.sh "$(CAPHE_CACHE)/libexec/install-tools.sh"
