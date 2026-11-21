@@ -195,3 +195,39 @@ make down-k8s
 Do not remove volumes or the Minikube profile unless you intend to discard its jobs.
 No Swarm leave, global Docker prune, or changes to other Kubernetes contexts are
 needed for this workflow.
+
+## Workbench verification after deployment
+
+Each deployment integration target now checks the embedded UI assets and runs the
+complete authenticated upload → execution → verified bundle flow twice: directly
+against the API and through the deployed workbench's same-origin proxy. Kubernetes
+checks wait for the UI rollout and create a temporary UI port-forward on 13000,
+which is cleaned up along with the API forward. These checks catch a UI service
+that loads its HTML but cannot reach or authenticate with its API.
+
+Browser interaction and accessibility checks reuse the repository's existing
+Playwright and axe development dependencies. They are not runtime dependencies of
+the installed product:
+
+```bash
+(cd website && npm ci)
+# After deploying Compose; use CAPHE_UI_TEST_URL for a laptop or K8s forward:
+make test-workbench-browser
+# For example, against a manually forwarded Kubernetes UI:
+make test-workbench-browser CAPHE_UI_TEST_URL=http://127.0.0.1:3001
+```
+
+The suite checks search, combined filters, sorting, grouping, dossier tabs,
+keyboard navigation, resizing, saved views, local triage, batch actions, export,
+light/dark accessibility, 390–1920px layouts, live tenant authentication, and
+switching away from an in-flight live dossier. Credentials are read from the
+ignored auth file and are never included in test output. Without
+`CAPHE_UI_TEST_URL`, the browser tests skip during the default Node test run.
+
+Browser verification caught two presentation defects that health checks could not:
+selected-row metadata had insufficient contrast in light mode, and making the
+navigation rail fixed on mobile moved the work surface into the zero-width grid
+column. The UI now assigns the work surface to its explicit column, keeps hidden
+mobile navigation out of keyboard focus, and uses darker text tones. Late live
+bundle responses are also discarded after disconnecting or switching context so
+they cannot overwrite the sample workspace.

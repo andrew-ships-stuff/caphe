@@ -1,0 +1,52 @@
+name: sync docs to wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'scripts/sync-docs-to-wiki.py'
+      - '.github/workflows/wiki.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Sync docs/ into the wiki repository
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN || github.token }}
+          DOCS_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          url="https://x-access-token:${WIKI_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git"
+          if git ls-remote --exit-code --heads "$url" main >/dev/null 2>&1; then
+            git clone -q "$url" wiki
+            git -C wiki rm -q -r --ignore-unmatch '*.md'
+          else
+            mkdir wiki
+            git -C wiki init -q
+            git -C wiki remote add origin "$url"
+          fi
+          python3 scripts/sync-docs-to-wiki.py docs wiki
+          git -C wiki config user.name "caphe-wiki-sync[bot]"
+          git -C wiki config user.email "caphe-wiki-sync[bot]@users.noreply.github.com"
+          git -C wiki add -A -- '*.md'
+          if git -C wiki diff --cached --quiet; then
+            echo "wiki already in sync"
+            exit 0
+          fi
+          git -C wiki commit -q \
+            -m "Sync wiki from docs@${DOCS_COMMIT:0:7}" \
+            -m "Automated sync from https://github.com/${GITHUB_REPOSITORY}/tree/${DOCS_COMMIT}/docs"
+          git -C wiki push -q origin HEAD:main

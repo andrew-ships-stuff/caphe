@@ -21,6 +21,16 @@ func TestDeployedCluster(t *testing.T) {
 	if endpoint == "" {
 		t.Skip("set CAPHE_TEST_ENDPOINT to test a deployed cluster")
 	}
+	t.Run("direct API", func(t *testing.T) { testDeployedCluster(t, endpoint) })
+	if ui := os.Getenv("CAPHE_TEST_UI_ENDPOINT"); ui != "" {
+		t.Run("workbench proxy", func(t *testing.T) { testDeployedCluster(t, ui+"/api") })
+	}
+}
+
+func testDeployedCluster(t *testing.T, endpoint string) {
+	if endpoint == "" {
+		t.Skip("set CAPHE_TEST_ENDPOINT to test a deployed cluster")
+	}
 	data, err := os.ReadFile(os.Getenv("CAPHE_TEST_AUTH_FILE"))
 	if err != nil {
 		t.Fatal(err)

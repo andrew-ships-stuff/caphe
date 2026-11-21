@@ -35,7 +35,8 @@ export default defineConfig({
             { label: 'Getting started', slug: 'docs/getting-started' },
             { label: 'Architecture', slug: 'docs/architecture' },
             { label: 'CLI reference', slug: 'docs/cli' },
-            { label: 'Cluster execution', slug: 'docs/cluster' }
+            { label: 'Cluster execution', slug: 'docs/cluster' },
+            { label: 'Security workbench', slug: 'docs/workbench' }
           ]
         },
         {

@@ -172,3 +172,9 @@ api-forward:
 
 ui-forward:
 	$(KUBECTL) --context $(CAPHE_K8S_CONTEXT) -n $(CAPHE_K8S_NAMESPACE) port-forward --address 127.0.0.1 service/caphe-ui 3000:3000
+
+.PHONY: test-workbench-browser
+CAPHE_UI_TEST_URL ?= http://127.0.0.1:3000
+
+test-workbench-browser:
+	CAPHE_UI_TEST_URL="$(CAPHE_UI_TEST_URL)" CAPHE_TEST_AUTH_FILE="$(CAPHE_TEST_AUTH_FILE)" node --test tests/workbench/browser.test.mjs
